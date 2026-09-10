@@ -612,22 +612,36 @@ function editQueueStaff(queueId, newStaffId, actorName, reason){
   return {ok:true};
 }
 
-/* "แทนคิว" — a covering staff member (same brand ONLY) swaps queue
-   positions with someone who is currently WAITING. Neither ticket is
-   cancelled and neither jumps straight to SERVING — the two just trade
-   seq numbers, so the covering person moves up to the earlier position
-   and the original person moves back to the covering person's old spot.
-   Both stay WAITING and will be called normally when their new position
-   comes up. A typed reason (same rule as cancelling a queue) is required
-   so this is always traceable in the change log / audit trail. */
-function substituteQueue(oldQueueId, coveringQueueId, actorName, reason){
-  const oldQ = state.queues.find(x=>x.id===oldQueueId);
+/* "แทนคิว" has two flavors, chosen by the reason given:
+   - TEMPORARY ("ขอสลับคิวชั่วคราว"): nobody is cancelled. The two
+     WAITING tickets simply trade seq numbers — the covering person
+     moves up to the earlier position, the original person moves back
+     to the covering person's old spot. Both stay WAITING and will be
+     called normally when their new position comes up. Use this when
+     the original person is expected back and should reclaim a spot.
+   - PERMANENT (any other reason): the original ticket is cancelled
+     (never hard-deleted, Rule §5) and disappears from the board —
+     if that person comes back they must create a brand-new queue
+     entry, same as anyone else. The covering person's own ticket
+     takes over the vacated seq/position and stays WAITING (it is
+     not pushed straight to SERVING).
+   Both flavors require a typed reason (same rule as cancelling a
+   queue) so the outcome is always traceable in the change log /
+   audit trail. */
+function validateSubstitution(oldQ, coveringQ, reason){
   if(!oldQ || oldQ.status!=="WAITING") return {ok:false, msg:"ไม่พบคิวที่รออยู่"};
-  const coveringQ = state.queues.find(x=>x.id===coveringQueueId);
   if(!coveringQ || coveringQ.status!=="WAITING") return {ok:false, msg:"คิวที่จะแทนไม่ได้อยู่ในสถานะรอ"};
   if(coveringQ.id===oldQ.id) return {ok:false, msg:"ไม่สามารถแทนคิวตัวเองได้"};
   if(coveringQ.brandId!==oldQ.brandId) return {ok:false, msg:"แทนคิวได้เฉพาะแบรนด์เดียวกันเท่านั้น"};
   if(!reason || reason.trim().length < 3) return {ok:false, msg:"กรุณาพิมพ์เหตุผลในการแทนคิว (อย่างน้อย 3 ตัวอักษร)"};
+  return {ok:true};
+}
+
+function substituteQueueSwap(oldQueueId, coveringQueueId, actorName, reason){
+  const oldQ = state.queues.find(x=>x.id===oldQueueId);
+  const coveringQ = state.queues.find(x=>x.id===coveringQueueId);
+  const check = validateSubstitution(oldQ, coveringQ, reason);
+  if(!check.ok) return check;
 
   const oldStaff=staffById(oldQ.staffId), newStaff=staffById(coveringQ.staffId);
   const oldSeqBefore = oldQ.seq, coveringSeqBefore = coveringQ.seq;
@@ -639,7 +653,29 @@ function substituteQueue(oldQueueId, coveringQueueId, actorName, reason){
 
   addChangeLog(oldQ, actorName, "สลับคิว", {seq:oldSeqBefore}, {seq:oldQ.seq}, trimmedReason);
   addChangeLog(coveringQ, actorName, "สลับคิว", {seq:coveringSeqBefore}, {seq:coveringQ.seq}, trimmedReason);
-  logAudit(actorName, "แทนคิว", `สลับตำแหน่งคิว #${oldSeqBefore} (${oldStaff?.name||'-'}) ↔ #${coveringSeqBefore} (${newStaff?.name||'-'}) — เหตุผล: ${trimmedReason}`);
+  logAudit(actorName, "แทนคิว (สลับชั่วคราว)", `สลับตำแหน่งคิว #${oldSeqBefore} (${oldStaff?.name||'-'}) ↔ #${coveringSeqBefore} (${newStaff?.name||'-'}) — เหตุผล: ${trimmedReason}`);
+  saveState();
+  return {ok:true, oldSeqBefore, coveringSeqBefore};
+}
+
+function substituteQueueReplace(oldQueueId, coveringQueueId, actorName, reason){
+  const oldQ = state.queues.find(x=>x.id===oldQueueId);
+  const coveringQ = state.queues.find(x=>x.id===coveringQueueId);
+  const check = validateSubstitution(oldQ, coveringQ, reason);
+  if(!check.ok) return check;
+
+  const oldStaff=staffById(oldQ.staffId), newStaff=staffById(coveringQ.staffId);
+  const oldSeqBefore = oldQ.seq, coveringSeqBefore = coveringQ.seq;
+  const trimmedReason = reason.trim();
+
+  // Old ticket disappears from the board (cancelled, not hard-deleted).
+  const cancelRes = cancelQueue(oldQ.id, actorName, `ถูกแทนคิวโดย ${newStaff?.name||'-'} — ${trimmedReason}`);
+  if(!cancelRes.ok) return cancelRes;
+
+  // Covering ticket takes over the vacated position, stays WAITING.
+  coveringQ.seq = oldSeqBefore;
+  addChangeLog(coveringQ, actorName, "รับช่วงคิว", {seq:coveringSeqBefore}, {seq:coveringQ.seq}, trimmedReason);
+  logAudit(actorName, "แทนคิว", `#${oldSeqBefore} (${oldStaff?.name||'-'}) ถูกยกเลิก — ${newStaff?.name||'-'} รับช่วงต่อที่ตำแหน่ง #${oldSeqBefore} (เดิม #${coveringSeqBefore}) — เหตุผล: ${trimmedReason}`);
   saveState();
   return {ok:true, oldSeqBefore, coveringSeqBefore};
 }
@@ -1355,7 +1391,7 @@ function renderManageModal(){
     if(!manageFlow.coveringId){
       body.innerHTML = `
         <h3>แทนคิว #${q.seq}</h3>
-        <div class="step-note">${staff?.name||'-'} · ${brand?.name||'-'} — เลือกพนักงานแบรนด์เดียวกันที่จะสลับตำแหน่งคิวด้วย<br>ทั้งสองคิวจะแค่สลับตำแหน่งกัน ไม่มีคิวใดถูกยกเลิกหรือขึ้นบริการทันที</div>
+        <div class="step-note">${staff?.name||'-'} · ${brand?.name||'-'} — เลือกพนักงานแบรนด์เดียวกันที่จะแทนคิวนี้<br>ปกติคิว #${q.seq} จะถูกยกเลิกและหายไปจากบอร์ด (${staff?.name||'-'} ต้องลงคิวใหม่ทีหลัง) — ยกเว้นเลือกเหตุผล "ขอสลับคิวชั่วคราว" ซึ่งจะแค่สลับตำแหน่งกันเฉยๆ ไม่มีใครถูกยกเลิก</div>
         <div class="grid-pick" id="subPick"></div>
         <div class="modal-actions">
           <button class="btn-ghost" id="cancelBtn">ยกเลิก</button>
@@ -1378,19 +1414,25 @@ function renderManageModal(){
     } else {
       const coveringQ = state.queues.find(x=>x.id===manageFlow.coveringId);
       const coveringStaff = staffById(coveringQ?.staffId);
-      body.innerHTML = `
-        <h3>ยืนยันแทนคิว</h3>
-        <div class="confirm-summary">
+      const SWAP_REASON = 'ขอสลับคิวชั่วคราว';
+      const previewHtml = (isSwap)=> isSwap ? `
           <div>คิว #${q.seq} (<strong>${staff?.name||'-'}</strong>) จะเปลี่ยนเป็นตำแหน่ง #${coveringQ?.seq}</div>
           <div>คิว #${coveringQ?.seq} (<strong>${coveringStaff?.name||'-'}</strong>) จะเปลี่ยนเป็นตำแหน่ง #${q.seq}</div>
-          <div style="margin-top:6px;color:var(--ink-faint);">ทั้งสองคิวยังคงเป็นสถานะ "รอ" เหมือนเดิม แค่สลับตำแหน่งกัน</div>
-        </div>
+          <div style="margin-top:6px;color:var(--ink-faint);">สลับชั่วคราว — ทั้งสองคิวยังคงเป็นสถานะ "รอ" เหมือนเดิม แค่สลับตำแหน่งกัน</div>
+        ` : `
+          <div>คิว #${q.seq} (<strong>${staff?.name||'-'}</strong>) จะถูก<strong style="color:var(--danger);">ยกเลิกและหายไปจากบอร์ด</strong></div>
+          <div>คิว #${coveringQ?.seq} (<strong>${coveringStaff?.name||'-'}</strong>) จะรับช่วงต่อที่ตำแหน่ง #${q.seq}</div>
+          <div style="margin-top:6px;color:var(--ink-faint);">${staff?.name||'-'} ต้องลงคิวใหม่เมื่อกลับมา</div>
+        `;
+      body.innerHTML = `
+        <h3>ยืนยันแทนคิว</h3>
+        <div class="confirm-summary" id="subPreview">${previewHtml(false)}</div>
         <div>เหตุผลในการแทนคิว (จำเป็น) :</div>
         <select id="reasonPreset" class="reason-select">
           <option value="">— เลือกเหตุผล —</option>
           <option>ยืนแทนคิว</option>
           <option>ไม่สะดวกตามคิวเดิม</option>
-          <option>ขอสลับคิวชั่วคราว</option>
+          <option>${SWAP_REASON}</option>
           <option value="OTHER">อื่นๆ (ระบุเอง)</option>
         </select>
         <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
@@ -1400,6 +1442,9 @@ function renderManageModal(){
           <button class="btn-primary" id="confirmBtn">ยืนยันแทนคิว</button>
         </div>
       `;
+      document.getElementById('reasonPreset').onchange = (e)=>{
+        document.getElementById('subPreview').innerHTML = previewHtml(e.target.value===SWAP_REASON);
+      };
       document.getElementById('backBtn').onclick = ()=>{ manageFlow.coveringId=null; renderManageModal(); };
       document.getElementById('confirmBtn').onclick = ()=>{
         const preset = document.getElementById('reasonPreset').value;
@@ -1407,9 +1452,16 @@ function renderManageModal(){
         const reason = preset === 'OTHER' ? typed : (typed ? `${preset} — ${typed}` : preset);
         const actor = session.role==='ADMIN'?'Admin':(staff?.name||'พนักงานขาย');
         const oldSeqBefore = q.seq, coveringSeqBefore = coveringQ.seq;
-        const res = substituteQueue(q.id, manageFlow.coveringId, actor, reason);
+        const isSwap = preset === SWAP_REASON;
+        const res = isSwap
+          ? substituteQueueSwap(q.id, manageFlow.coveringId, actor, reason)
+          : substituteQueueReplace(q.id, manageFlow.coveringId, actor, reason);
         if(!res.ok){ document.getElementById('modalError').textContent = res.msg; return; }
-        closeModal(); render(); showSuccess('แทนคิวสำเร็จ', `${staff?.name||'-'} ได้คิว #${coveringSeqBefore} และ ${coveringStaff?.name||'-'} ได้คิว #${oldSeqBefore} แล้ว`);
+        if(isSwap){
+          closeModal(); render(); showSuccess('สลับคิวสำเร็จ', `${staff?.name||'-'} ได้คิว #${coveringSeqBefore} และ ${coveringStaff?.name||'-'} ได้คิว #${oldSeqBefore} แล้ว`);
+        } else {
+          closeModal(); render(); showSuccess('แทนคิวสำเร็จ', `คิว #${oldSeqBefore} ถูกยกเลิกแล้ว — ${coveringStaff?.name||'-'} รับช่วงต่อที่ตำแหน่ง #${oldSeqBefore}`);
+        }
       };
     }
   }
@@ -1438,6 +1490,8 @@ function renderManageModal(){
           changeDesc = `สถานะเดิม: ${STATUS_LABEL_TH[l.before?.status]||l.before?.status||'-'} → กลับมาเป็นคิวที่รอ`;
         } else if(l.action==='สลับคิว'){
           changeDesc = `ตำแหน่งคิว #${l.before?.seq} → #${l.after?.seq}`;
+        } else if(l.action==='รับช่วงคิว'){
+          changeDesc = `รับช่วงต่อ — ตำแหน่งคิว #${l.before?.seq} → #${l.after?.seq}`;
         }
         return `<div class="audit-line">
           <span class="ts mono">${fmtTime(l.ts)}</span><strong>${l.actor}</strong> — ${l.action}<br>
