@@ -198,6 +198,15 @@
   .btn-board-add:hover{filter:brightness(.98);}
   .btn-board-add:disabled{opacity:.45;cursor:not-allowed;}
   .admin-danger{margin-top:20px;border:1px solid #F2B8B5;background:#FFF8F7;}
+  .settings-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:18px;cursor:pointer;}
+  .settings-toggle-copy{flex:1;}
+  .settings-toggle-title{font-weight:700;font-size:14.5px;color:var(--ink);}
+  .settings-toggle-wrap{position:relative;display:inline-block;width:46px;height:27px;flex-shrink:0;}
+  .settings-toggle-wrap input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;}
+  .settings-toggle-switch{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:background .15s;}
+  .settings-toggle-switch::after{content:'';position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.3);}
+  .settings-toggle-wrap input:checked + .settings-toggle-switch{background:#15803D;}
+  .settings-toggle-wrap input:checked + .settings-toggle-switch::after{transform:translateX(19px);}
   .admin-danger h3{color:var(--danger);}
   .btn-reset{background:var(--danger);color:#fff;border:none;padding:11px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;}
 
@@ -243,13 +252,14 @@ table.hist tr:hover td{background:#f8fafc;}
 @media(max-width:700px){.section-head{align-items:flex-start;flex-direction:column}.btn-export{margin-left:0;width:100%;}.reason-select{min-height:42px;}}
 
 /* ===== HISTORY + AUDIT TIMELINE ===== */
-.history-ticket{background:#fff;border:1px solid #e2e8f0;border-radius:16px;margin-bottom:14px;overflow:hidden;box-shadow:0 4px 16px rgba(15,23,42,.04)}
+.history-ticket{background:#fff;border:1px solid #e2e8f0;border-left:5px solid var(--day-color,#cbd5e1);border-radius:16px;margin-bottom:14px;overflow:hidden;box-shadow:0 4px 16px rgba(15,23,42,.04)}
 .history-ticket-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0}
-.history-ticket-id{font-size:23px;font-weight:800;margin-right:9px}.history-ticket-date{font-size:11.5px;color:#64748b;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:2px 7px;margin-right:9px}.history-ticket-meta{font-size:12.5px;color:#64748b;margin-top:3px}.history-ticket-staff{font-size:16px;font-weight:700;color:var(--ink);margin-right:6px}
+.history-ticket-idgroup{display:inline-flex;align-items:baseline;gap:7px;margin-right:9px}.history-ticket-id{font-size:23px;font-weight:800}.history-ticket-date{font-size:14px;font-weight:700;color:var(--day-color,#64748b)}.history-ticket-meta{font-size:12.5px;color:#64748b;margin-top:3px}.history-ticket-staff{font-size:16px;font-weight:700;color:var(--ink);margin-right:6px}
 .history-timeline{padding:16px 18px 8px}.history-event{display:flex;gap:12px;position:relative;padding:0 0 15px}.history-event:not(:last-child):after{content:'';position:absolute;left:15px;top:31px;bottom:0;width:2px;background:#e2e8f0}.history-event-dot{position:relative;z-index:1;width:32px;height:32px;min-width:32px;border-radius:50%;display:grid;place-items:center;background:#f1f5f9;border:1px solid #cbd5e1;font-weight:800}.history-event-main{flex:1;padding-top:2px}.history-event-top{display:flex;justify-content:space-between;gap:10px}.history-event-top strong{font-size:13.5px}.history-event-detail{font-size:12.5px;color:#64748b;margin-top:4px;line-height:1.5}.history-event.create .history-event-dot{background:#F1F5F9;color:#475569}.history-event.call .history-event-dot{background:var(--serving-bg);color:#15803d}.history-event.complete .history-event-dot{background:#EFF6FF;color:var(--completed)}.history-event.skip .history-event-dot{background:#FFF7ED;color:var(--skipped)}.history-event.cancel .history-event-dot{background:#FEF2F2;color:var(--danger)}
 .history-ticket-foot{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid #e2e8f0;background:#fff;flex-wrap:wrap}.history-ticket-foot>div:not(.history-actions){min-width:100px;padding-right:14px;border-right:1px solid #e2e8f0}.history-ticket-foot span{display:block;color:#64748b;font-size:11px}.history-ticket-foot b{display:block;font-size:13px;margin-top:2px}.history-actions{margin-left:auto}
 /* ---- history readability upgrades ---- */
-.hist-date-header{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 4px 8px;margin-top:4px;font-size:12.5px;font-weight:700;color:var(--ink-dim);border-bottom:1px solid var(--line);}
+.hist-date-header{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 4px 8px;margin-top:4px;font-size:12.5px;font-weight:700;color:var(--ink-dim);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;}
+.hist-date-dot{width:10px;height:10px;border-radius:50%;background:var(--day-color,#94a3b8);flex-shrink:0;}
 .hist-date-header:first-child{margin-top:0;}
 .manage-menu{position:relative;display:inline-block;}
 .btn-manage{background:transparent;color:var(--ink-dim);border:1px solid var(--line);padding:8px 12px;border-radius:7px;font-size:12.5px;cursor:pointer;}
@@ -354,6 +364,7 @@ function freshState(){
     queues: [],
     audit: [],
     lastActiveDate: todayKey(),
+    settings: { autoRequeue: false },
   };
 }
 function loadState(){
@@ -367,6 +378,9 @@ function loadState(){
     // Stamp it with today rather than forcing a reset on the very next
     // load — a real day-change will still be caught on its own next load.
     if(typeof parsed.lastActiveDate !== "string") parsed.lastActiveDate = todayKey();
+    // Older saved states won't have a settings object yet either.
+    if(!parsed.settings || typeof parsed.settings !== "object") parsed.settings = { autoRequeue:false };
+    if(typeof parsed.settings.autoRequeue !== "boolean") parsed.settings.autoRequeue = false;
     return parsed;
   }catch(e){ return freshState(); }
 }
@@ -491,7 +505,7 @@ function nextSeq(){
   return state.seqCounter;
 }
 
-function createQueue(staffId){
+function createQueue(staffId, auto){
   const staff = staffById(staffId);
   if(!staff) return {ok:false, msg:"ข้อมูลไม่ถูกต้อง"};
   const brand = brandById(staff.brandId);
@@ -506,7 +520,7 @@ function createQueue(staffId){
     completedAt: null,
   };
   state.queues.push(q);
-  logAudit(staff.name, "สร้างคิว", `ลำดับ ${q.seq} → ${brand?.name||'-'}`);
+  logAudit(staff.name, "สร้างคิว", `ลำดับ ${q.seq} → ${brand?.name||'-'}${auto?' (ลงอัตโนมัติหลังจบงาน)':''}`);
   saveState();
   return {ok:true, queue:q};
 }
@@ -781,8 +795,29 @@ function renderBoard(root){
       `;
       el.querySelector('.btn-complete').onclick = ()=>{
         if(!canWrite()) return;
-        completeQueue(q.id, staff?.name||'ระบบ');
-        render();
+        const actor = staff?.name||'ระบบ';
+        const finishedSeq = q.seq;
+        completeQueue(q.id, actor);
+        // Optional habit-matching flow (settings toggle): mirrors what the
+        // department used to do in Notepad — delete the served name, then
+        // immediately write it again at the end of the list. Undo-able via
+        // the toast in case that particular person is done for the day.
+        if(state.settings.autoRequeue){
+          const res = createQueue(q.staffId, true);
+          render();
+          if(res.ok){
+            const newQ = res.queue;
+            showActionToast(`จบคิว #${finishedSeq} แล้ว — ลงคิวใหม่ #${newQ.seq} ให้ ${staff?.name||'-'} อัตโนมัติ`, ()=>{
+              cancelQueue(newQ.id, actor, 'ไม่ลงคิวต่อ');
+              render();
+            });
+          } else {
+            showActionToast(`จบคิว #${finishedSeq} แล้ว`);
+          }
+        } else {
+          render();
+          showActionToast(`จบคิว #${finishedSeq} แล้ว`);
+        }
       };
       const returnBtn = el.querySelector('[data-return-waiting]');
       if(returnBtn){
@@ -878,6 +913,18 @@ function exportAuditXLS(){
 function dateLabelTH(ts){
   return new Date(ts).toLocaleDateString('th-TH', {day:'numeric', month:'short'});
 }
+/* Fix: the #seq resets to 1 every day (Rule §14), so "#5" alone is
+   ambiguous once History spans more than one day. Every ticket now
+   carries its date in the SAME visual weight as the number (not a
+   faded afterthought chip), plus a color tied to that specific date —
+   so two "#5" tickets from different days are never mistaken for one
+   another, even scrolling fast or after a search. */
+const DAY_COLOR_PALETTE = ['#2563EB','#059669','#D97706','#DB2777','#7C3AED','#0891B2','#DC2626','#65A30D'];
+function dayColorFor(dateKey){
+  let hash = 0;
+  for(let i=0;i<dateKey.length;i++) hash = (hash*31 + dateKey.charCodeAt(i)) >>> 0;
+  return DAY_COLOR_PALETTE[hash % DAY_COLOR_PALETTE.length];
+}
 function renderHistory(root){
   // distinct calendar days present in the data, newest first
   const dateKeys = Array.from(new Set(state.queues.map(q=>todayKey(q.createdAt)))).sort((a,b)=>b.localeCompare(a));
@@ -960,7 +1007,8 @@ function renderHistory(root){
     }
     // Improvement #1: only show the stat cells that actually have a value.
     const stats=[statRow('รอคิว',wait), statRow('บริการ',service), statRow('รวม',total)].join('');
-    return `<section class="history-ticket"><div class="history-ticket-head"><div><span class="history-ticket-id">คิว #${q.seq}</span><span class="history-ticket-date mono">${dateLabelTH(q.createdAt)}</span><span class="status-pill ${q.status}">${statusLabel}</span></div><div class="history-ticket-meta"><span class="history-ticket-staff">👤 ${staff?.name||'-'}</span>${brand?.name||'-'}</div></div><div class="history-timeline">${events}</div><div class="history-ticket-foot">${stats}<div class="history-actions">${actionsCell(q,hasLog,canManage,canEditStaff)}</div></div></section>`;
+    const dayColor = dayColorFor(todayKey(q.createdAt));
+    return `<section class="history-ticket" style="--day-color:${dayColor}"><div class="history-ticket-head"><div><span class="history-ticket-idgroup"><span class="history-ticket-id">#${q.seq}</span><span class="history-ticket-date mono">${dateLabelTH(q.createdAt)}</span></span><span class="status-pill ${q.status}">${statusLabel}</span></div><div class="history-ticket-meta"><span class="history-ticket-staff">👤 ${staff?.name||'-'}</span>${brand?.name||'-'}</div></div><div class="history-timeline">${events}</div><div class="history-ticket-foot">${stats}<div class="history-actions">${actionsCell(q,hasLog,canManage,canEditStaff)}</div></div></section>`;
   }
   function draw(){
     const term = document.getElementById('histSearch').value.trim().toLowerCase();
@@ -1006,7 +1054,8 @@ function renderHistory(root){
       const dk = todayKey(q.createdAt);
       if(dk !== lastKey){
         lastKey = dk;
-        html += `<div class="hist-date-header">${dateLabelTH(q.createdAt)}${dk===today?' (วันนี้)':''}</div>`;
+        const dc = dayColorFor(dk);
+        html += `<div class="hist-date-header" style="--day-color:${dc}"><span class="hist-date-dot"></span>${dateLabelTH(q.createdAt)}${dk===today?' (วันนี้)':''}</div>`;
       }
       html += ticketHtml(q);
     });
@@ -1061,6 +1110,19 @@ function renderAudit(root){
    ========================================================= */
 function renderAdmin(root){
   root.innerHTML = `
+    <div class="admin-card" style="grid-column:1/-1;">
+      <h3>ตั้งค่าการทำงาน</h3>
+      <label class="settings-toggle-row" for="autoRequeueToggle">
+        <div class="settings-toggle-copy">
+          <div class="settings-toggle-title">ลงคิวใหม่อัตโนมัติหลังจบงาน</div>
+          <div class="step-note" style="margin:2px 0 0;">พอกด "จบการบริการ" ระบบลงคิวใหม่ให้พนักงานคนนั้นทันที เหมือนที่แผนกเคยลบชื่อใน Notepad แล้วเขียนต่อท้ายใหม่ — กด "เลิกทำ" ในข้อความแจ้งเตือนได้เสมอถ้ารอบนั้นไม่รับคิวต่อ</div>
+        </div>
+        <span class="settings-toggle-wrap">
+          <input type="checkbox" id="autoRequeueToggle" ${state.settings.autoRequeue?'checked':''}>
+          <span class="settings-toggle-switch"></span>
+        </span>
+      </label>
+    </div>
     <div class="admin-cols">
       <div class="admin-card">
         <h3>แบรนด์ (${state.brands.length})</h3>
@@ -1086,6 +1148,11 @@ function renderAdmin(root){
       <button class="btn-reset" id="resetQueueBtn">รีเซ็ตคิว</button>
     </div>
   `;
+  document.getElementById('autoRequeueToggle').onchange = (e)=>{
+    state.settings.autoRequeue = e.target.checked;
+    logAudit('Admin','ตั้งค่า', `ลงคิวใหม่อัตโนมัติหลังจบงาน: ${e.target.checked?'เปิด':'ปิด'}`);
+    saveState();
+  };
   const resetBtn = document.getElementById('resetQueueBtn');
   resetBtn.onclick = openResetQueueModal;
   const brandList = document.getElementById('brandList');
