@@ -593,6 +593,7 @@ function editQueueStaff(queueId, newStaffId, actorName, reason){
   const q = state.queues.find(x=>x.id===queueId);
   if(!q) return {ok:false, msg:"ไม่พบคิว"};
   if(q.status==="DELETED") return {ok:false, msg:"ไม่สามารถแก้ไขคิวที่ถูกยกเลิกแล้วได้"};
+  if(q.status==="COMPLETED") return {ok:false, msg:"คิวนี้จบการบริการแล้ว ไม่สามารถเปลี่ยนพนักงานย้อนหลังได้ (ป้องกันการสลับเครดิตคิว)"};
   if(!reason || reason.trim().length < 3) return {ok:false, msg:"กรุณาระบุเหตุผลในการแก้ไขคิว (อย่างน้อย 3 ตัวอักษร)"};
   const newStaff = staffById(newStaffId);
   if(!newStaff) return {ok:false, msg:"ข้อมูลพนักงานไม่ถูกต้อง"};
@@ -609,6 +610,38 @@ function editQueueStaff(queueId, newStaffId, actorName, reason){
   logAudit(actorName, "แก้ไขคิว", `ลำดับ ${q.seq}: ${before.staffName} (${before.brandName}) → ${after.staffName} (${after.brandName}) — เหตุผล: ${reason.trim()}`);
   saveState();
   return {ok:true};
+}
+
+/* "แทนคิว" — a covering staff member (same brand ONLY) swaps queue
+   positions with someone who is currently WAITING. Neither ticket is
+   cancelled and neither jumps straight to SERVING — the two just trade
+   seq numbers, so the covering person moves up to the earlier position
+   and the original person moves back to the covering person's old spot.
+   Both stay WAITING and will be called normally when their new position
+   comes up. A typed reason (same rule as cancelling a queue) is required
+   so this is always traceable in the change log / audit trail. */
+function substituteQueue(oldQueueId, coveringQueueId, actorName, reason){
+  const oldQ = state.queues.find(x=>x.id===oldQueueId);
+  if(!oldQ || oldQ.status!=="WAITING") return {ok:false, msg:"ไม่พบคิวที่รออยู่"};
+  const coveringQ = state.queues.find(x=>x.id===coveringQueueId);
+  if(!coveringQ || coveringQ.status!=="WAITING") return {ok:false, msg:"คิวที่จะแทนไม่ได้อยู่ในสถานะรอ"};
+  if(coveringQ.id===oldQ.id) return {ok:false, msg:"ไม่สามารถแทนคิวตัวเองได้"};
+  if(coveringQ.brandId!==oldQ.brandId) return {ok:false, msg:"แทนคิวได้เฉพาะแบรนด์เดียวกันเท่านั้น"};
+  if(!reason || reason.trim().length < 3) return {ok:false, msg:"กรุณาพิมพ์เหตุผลในการแทนคิว (อย่างน้อย 3 ตัวอักษร)"};
+
+  const oldStaff=staffById(oldQ.staffId), newStaff=staffById(coveringQ.staffId);
+  const oldSeqBefore = oldQ.seq, coveringSeqBefore = coveringQ.seq;
+  const trimmedReason = reason.trim();
+
+  // Swap positions only — both queues remain WAITING, no status change.
+  oldQ.seq = coveringSeqBefore;
+  coveringQ.seq = oldSeqBefore;
+
+  addChangeLog(oldQ, actorName, "สลับคิว", {seq:oldSeqBefore}, {seq:oldQ.seq}, trimmedReason);
+  addChangeLog(coveringQ, actorName, "สลับคิว", {seq:coveringSeqBefore}, {seq:coveringQ.seq}, trimmedReason);
+  logAudit(actorName, "แทนคิว", `สลับตำแหน่งคิว #${oldSeqBefore} (${oldStaff?.name||'-'}) ↔ #${coveringSeqBefore} (${newStaff?.name||'-'}) — เหตุผล: ${trimmedReason}`);
+  saveState();
+  return {ok:true, oldSeqBefore, coveringSeqBefore};
 }
 
 /* =========================================================
@@ -756,6 +789,10 @@ function renderBoard(root){
       // Same "จัดการ" menu pattern as the History page: keep the one
       // primary action (ขึ้นคิว) as its own button, tuck the rest away.
       const manageItems = [];
+      const sameBrandCandidates = waiting.filter(w=>w.brandId===q.brandId && w.id!==q.id);
+      if(sameBrandCandidates.length){
+        manageItems.push(`<button class="menu-item" onclick="closeAllManageMenus();if(canWrite())openSubstituteModal('${q.id}')">แทนคิว</button>`);
+      }
       if(isSupervisorPlus()){
         manageItems.push(`<button class="menu-item" onclick="closeAllManageMenus();if(canWrite())openSkipModal('${q.id}')">ข้ามคิว</button>`);
         manageItems.push(`<button class="menu-item" onclick="closeAllManageMenus();if(canWrite())openEditModal('${q.id}')">แก้ไขคิว</button>`);
@@ -847,13 +884,16 @@ function renderHistory(root){
     if(value==='—') return '';
     return `<div><span>${label}</span><b>${value}</b></div>`;
   }
-  function actionsCell(q, hasLog, canManage){
+  function actionsCell(q, hasLog, canManage, canEditStaff){
     // Improvement #4: collapse the row of separate buttons into one
     // "จัดการ" (manage) menu so the footer doesn't get button-crowded.
     const items = [];
     if(hasLog) items.push(`<button class="menu-item" onclick="closeAllManageMenus();openLogModal('${q.id}')">🕘 ประวัติการแก้ไข (${q.changeLog.length})</button>`);
     if(canManage){
-      items.push(`<button class="menu-item" onclick="closeAllManageMenus();openEditModal('${q.id}')">แก้ไข</button>`);
+      // Fix: a COMPLETED queue can no longer be reassigned to a different
+      // staff member — that would silently move the sale credit after the
+      // fact. Cancel is still offered as the legitimate correction path.
+      if(canEditStaff) items.push(`<button class="menu-item" onclick="closeAllManageMenus();openEditModal('${q.id}')">แก้ไข</button>`);
       items.push(`<button class="menu-item danger" onclick="closeAllManageMenus();openCancelModal('${q.id}')">ยกเลิก</button>`);
     } else if(session.role==='STAFF' && q.status!=='DELETED'){
       items.push(`<button class="menu-item danger" onclick="closeAllManageMenus();openCancelModal('${q.id}')">ยกเลิก</button>`);
@@ -870,6 +910,7 @@ function renderHistory(root){
     const reason=(q.deleteReason||q.skipReason||'');
     const hasLog=q.changeLog&&q.changeLog.length&&isSupervisorPlus();
     const canManage=isSupervisorPlus()&&q.status!=='DELETED';
+    const canEditStaff=canManage&&q.status!=='COMPLETED';
     let events=eventCard('＋','create','ลงคิว',q.createdAt,`คิว <b>#${q.seq}</b> · ${brand?.name||'-'} · พนักงาน ${staff?.name||'-'}`);
     if(q.calledAt) events+=eventCard('☎','call','ขึ้นคิว',q.calledAt,`เริ่มบริการโดย ${q.calledBy||staff?.name||'-'} · รอคิว <b>${wait}</b>`);
     if(q.completedAt){
@@ -879,7 +920,7 @@ function renderHistory(root){
     }
     // Improvement #1: only show the stat cells that actually have a value.
     const stats=[statRow('รอคิว',wait), statRow('บริการ',service), statRow('รวม',total)].join('');
-    return `<section class="history-ticket"><div class="history-ticket-head"><div><span class="history-ticket-id">คิว #${q.seq}</span><span class="history-ticket-date mono">${dateLabelTH(q.createdAt)}</span><span class="status-pill ${q.status}">${statusLabel}</span></div><div class="history-ticket-meta"><span class="history-ticket-staff">👤 ${staff?.name||'-'}</span>${brand?.name||'-'}</div></div><div class="history-timeline">${events}</div><div class="history-ticket-foot">${stats}<div class="history-actions">${actionsCell(q,hasLog,canManage)}</div></div></section>`;
+    return `<section class="history-ticket"><div class="history-ticket-head"><div><span class="history-ticket-id">คิว #${q.seq}</span><span class="history-ticket-date mono">${dateLabelTH(q.createdAt)}</span><span class="status-pill ${q.status}">${statusLabel}</span></div><div class="history-ticket-meta"><span class="history-ticket-staff">👤 ${staff?.name||'-'}</span>${brand?.name||'-'}</div></div><div class="history-timeline">${events}</div><div class="history-ticket-foot">${stats}<div class="history-actions">${actionsCell(q,hasLog,canManage,canEditStaff)}</div></div></section>`;
   }
   function draw(){
     const term = document.getElementById('histSearch').value.trim().toLowerCase();
@@ -1129,6 +1170,11 @@ function openEditModal(queueId){
   document.getElementById('modalBackdrop').classList.add('show');
   renderManageModal();
 }
+function openSubstituteModal(queueId){
+  manageFlow = { type:'substitute', queueId, coveringId:null };
+  document.getElementById('modalBackdrop').classList.add('show');
+  renderManageModal();
+}
 function openLogModal(queueId){
   manageFlow = { type:'log', queueId };
   document.getElementById('modalBackdrop').classList.add('show');
@@ -1302,6 +1348,72 @@ function renderManageModal(){
     };
   }
 
+  else if(manageFlow.type==='substitute'){
+    // Same-brand WAITING tickets only — someone from a different brand
+    // has no business jumping in to cover this one.
+    const candidates = state.queues.filter(x=>x.status==='WAITING' && x.brandId===q.brandId && x.id!==q.id);
+    if(!manageFlow.coveringId){
+      body.innerHTML = `
+        <h3>แทนคิว #${q.seq}</h3>
+        <div class="step-note">${staff?.name||'-'} · ${brand?.name||'-'} — เลือกพนักงานแบรนด์เดียวกันที่จะสลับตำแหน่งคิวด้วย<br>ทั้งสองคิวจะแค่สลับตำแหน่งกัน ไม่มีคิวใดถูกยกเลิกหรือขึ้นบริการทันที</div>
+        <div class="grid-pick" id="subPick"></div>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="cancelBtn">ยกเลิก</button>
+        </div>
+      `;
+      const pick = document.getElementById('subPick');
+      if(!candidates.length){
+        pick.innerHTML = `<div class="empty-note">ไม่มีคิวที่รออยู่ในแบรนด์เดียวกันให้แทน</div>`;
+      } else {
+        candidates.forEach(c=>{
+          const cs = staffById(c.staffId);
+          const btn = document.createElement('button');
+          btn.className = 'pick-btn';
+          btn.innerHTML = `<span class="swatch" style="background:${brand?.color||'#888'}"></span><span><div>${cs?.name||'-'}</div><div class="staff-brand">คิว #${c.seq}</div></span>`;
+          btn.onclick = ()=>{ manageFlow.coveringId = c.id; renderManageModal(); };
+          pick.appendChild(btn);
+        });
+      }
+      document.getElementById('cancelBtn').onclick = closeModal;
+    } else {
+      const coveringQ = state.queues.find(x=>x.id===manageFlow.coveringId);
+      const coveringStaff = staffById(coveringQ?.staffId);
+      body.innerHTML = `
+        <h3>ยืนยันแทนคิว</h3>
+        <div class="confirm-summary">
+          <div>คิว #${q.seq} (<strong>${staff?.name||'-'}</strong>) จะเปลี่ยนเป็นตำแหน่ง #${coveringQ?.seq}</div>
+          <div>คิว #${coveringQ?.seq} (<strong>${coveringStaff?.name||'-'}</strong>) จะเปลี่ยนเป็นตำแหน่ง #${q.seq}</div>
+          <div style="margin-top:6px;color:var(--ink-faint);">ทั้งสองคิวยังคงเป็นสถานะ "รอ" เหมือนเดิม แค่สลับตำแหน่งกัน</div>
+        </div>
+        <div>เหตุผลในการแทนคิว (จำเป็น) :</div>
+        <select id="reasonPreset" class="reason-select">
+          <option value="">— เลือกเหตุผล —</option>
+          <option>ยืนแทนคิว</option>
+          <option>ไม่สะดวกตามคิวเดิม</option>
+          <option>ขอสลับคิวชั่วคราว</option>
+          <option value="OTHER">อื่นๆ (ระบุเอง)</option>
+        </select>
+        <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
+        <div class="error-msg" id="modalError"></div>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="backBtn">ย้อนกลับ</button>
+          <button class="btn-primary" id="confirmBtn">ยืนยันแทนคิว</button>
+        </div>
+      `;
+      document.getElementById('backBtn').onclick = ()=>{ manageFlow.coveringId=null; renderManageModal(); };
+      document.getElementById('confirmBtn').onclick = ()=>{
+        const preset = document.getElementById('reasonPreset').value;
+        const typed = document.getElementById('reasonInput').value.trim();
+        const reason = preset === 'OTHER' ? typed : (typed ? `${preset} — ${typed}` : preset);
+        const actor = session.role==='ADMIN'?'Admin':(staff?.name||'พนักงานขาย');
+        const oldSeqBefore = q.seq, coveringSeqBefore = coveringQ.seq;
+        const res = substituteQueue(q.id, manageFlow.coveringId, actor, reason);
+        if(!res.ok){ document.getElementById('modalError').textContent = res.msg; return; }
+        closeModal(); render(); showSuccess('แทนคิวสำเร็จ', `${staff?.name||'-'} ได้คิว #${coveringSeqBefore} และ ${coveringStaff?.name||'-'} ได้คิว #${oldSeqBefore} แล้ว`);
+      };
+    }
+  }
+
   else if(manageFlow.type==='log'){
     const logs = (q.changeLog||[]).slice().reverse();
     body.innerHTML = `
@@ -1324,6 +1436,8 @@ function renderManageModal(){
           changeDesc = `สถานะเดิม: ${STATUS_LABEL_TH[l.before?.status]||l.before?.status||'-'} → ยกเลิกแล้ว`;
         } else if(l.action==='คืนคิว'){
           changeDesc = `สถานะเดิม: ${STATUS_LABEL_TH[l.before?.status]||l.before?.status||'-'} → กลับมาเป็นคิวที่รอ`;
+        } else if(l.action==='สลับคิว'){
+          changeDesc = `ตำแหน่งคิว #${l.before?.seq} → #${l.after?.seq}`;
         }
         return `<div class="audit-line">
           <span class="ts mono">${fmtTime(l.ts)}</span><strong>${l.actor}</strong> — ${l.action}<br>
