@@ -613,7 +613,7 @@ function editQueueStaff(queueId, newStaffId, actorName, reason){
 }
 
 /* "แทนคิว" has two flavors, chosen by the reason given:
-   - TEMPORARY ("ขอสลับคิวชั่วคราว"): nobody is cancelled. The two
+   - TEMPORARY ("สลับคิวชั่วคราว"): nobody is cancelled. The two
      WAITING tickets simply trade seq numbers — the covering person
      moves up to the earlier position, the original person moves back
      to the covering person's old spot. Both stay WAITING and will be
@@ -1265,10 +1265,12 @@ function renderManageModal(){
       <div>เหตุผลในการยกเลิก (จำเป็น) :</div>
       <select id="reasonPreset" class="reason-select">
         <option value="">— เลือกเหตุผล —</option>
+        <option>กินข้าว</option>
         <option>ยืนข้างหน้า</option>
+        <option>ลงคิวผิด</option>
         <option>ยืนแทนคิว</option>
-        <option>ลงคิวผิดคน</option>
-        <option>ลูกค้าขอยกเลิก</option>
+        <option>ไม่อยู่ในแผนก</option>
+        <option>ไม่รับคิว</option>
         <option value="OTHER">อื่นๆ (ระบุเอง)</option>
       </select>
       <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
@@ -1298,8 +1300,7 @@ function renderManageModal(){
       <select id="reasonPreset" class="reason-select">
         <option value="">— เลือกเหตุผล —</option>
         <option>ไม่อยู่ในแผนก</option>
-        <option>ยืนข้างหน้า</option>
-        <option>ยืนแทนคิว</option>
+        <option>ไม่รับคิว</option>
         <option value="OTHER">อื่นๆ (ระบุเอง)</option>
       </select>
       <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
@@ -1359,10 +1360,8 @@ function renderManageModal(){
       <div>เหตุผลในการแก้ไข (จำเป็น) :</div>
       <select id="reasonPreset" class="reason-select">
         <option value="">— เลือกเหตุผล —</option>
-        <option>ลงคิวผิดคน</option>
-        <option>ยืนข้างหน้า</option>
+        <option>ลงคิวผิด</option>
         <option>ยืนแทนคิว</option>
-        <option>พนักงานเปลี่ยนคน</option>
         <option value="OTHER">อื่นๆ (ระบุเอง)</option>
       </select>
       <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
@@ -1391,7 +1390,7 @@ function renderManageModal(){
     if(!manageFlow.coveringId){
       body.innerHTML = `
         <h3>แทนคิว #${q.seq}</h3>
-        <div class="step-note">${staff?.name||'-'} · ${brand?.name||'-'} — เลือกพนักงานแบรนด์เดียวกันที่จะแทนคิวนี้<br>ปกติคิว #${q.seq} จะถูกยกเลิกและหายไปจากบอร์ด (${staff?.name||'-'} ต้องลงคิวใหม่ทีหลัง) — ยกเว้นเลือกเหตุผล "ขอสลับคิวชั่วคราว" ซึ่งจะแค่สลับตำแหน่งกันเฉยๆ ไม่มีใครถูกยกเลิก</div>
+        <div class="step-note">${staff?.name||'-'} · ${brand?.name||'-'} — เลือกพนักงานแบรนด์เดียวกันที่จะแทนคิวนี้<br>ปกติคิว #${q.seq} จะถูกยกเลิกและหายไปจากบอร์ด (${staff?.name||'-'} ต้องลงคิวใหม่ทีหลัง) — ยกเว้นเลือกเหตุผล "สลับคิวชั่วคราว" ซึ่งจะแค่สลับตำแหน่งกันเฉยๆ ไม่มีใครถูกยกเลิก</div>
         <div class="grid-pick" id="subPick"></div>
         <div class="modal-actions">
           <button class="btn-ghost" id="cancelBtn">ยกเลิก</button>
@@ -1414,7 +1413,7 @@ function renderManageModal(){
     } else {
       const coveringQ = state.queues.find(x=>x.id===manageFlow.coveringId);
       const coveringStaff = staffById(coveringQ?.staffId);
-      const SWAP_REASON = 'ขอสลับคิวชั่วคราว';
+      const SWAP_REASON = 'สลับคิวชั่วคราว';
       const previewHtml = (isSwap)=> isSwap ? `
           <div>คิว #${q.seq} (<strong>${staff?.name||'-'}</strong>) จะเปลี่ยนเป็นตำแหน่ง #${coveringQ?.seq}</div>
           <div>คิว #${coveringQ?.seq} (<strong>${coveringStaff?.name||'-'}</strong>) จะเปลี่ยนเป็นตำแหน่ง #${q.seq}</div>
@@ -1431,7 +1430,6 @@ function renderManageModal(){
         <select id="reasonPreset" class="reason-select">
           <option value="">— เลือกเหตุผล —</option>
           <option>ยืนแทนคิว</option>
-          <option>ไม่สะดวกตามคิวเดิม</option>
           <option>${SWAP_REASON}</option>
           <option value="OTHER">อื่นๆ (ระบุเอง)</option>
         </select>
