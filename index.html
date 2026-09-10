@@ -52,6 +52,9 @@
     max-width:90vw; text-align:center;
   }
   .daily-reset-toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .action-toast{background:#15803D; display:flex; align-items:center; gap:10px;}
+  .action-toast .toast-undo{background:transparent; border:1px solid rgba(255,255,255,.5); color:#fff; padding:5px 11px; border-radius:7px; font-size:12.5px; cursor:pointer; flex-shrink:0;}
+  .action-toast .toast-undo:hover{background:rgba(255,255,255,.15);}
 
   /* ---------- App shell ---------- */
   .app{max-width:1180px;margin:0 auto;padding:18px 20px 60px;}
@@ -271,6 +274,7 @@ table.hist tr:hover td{background:#f8fafc;}
 </div>
 
 <div id="dailyResetToast" class="daily-reset-toast"></div>
+<div id="actionToast" class="daily-reset-toast action-toast"></div>
 
 <div class="app">
 
@@ -1185,10 +1189,28 @@ function closeModal(){
 let manageFlow = null;
 const REASON_BOX = `style="width:100%;margin-top:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:10px;font-family:inherit;font-size:13.5px;resize:vertical;"`;
 
+/* Step-reduction fix: every cancel/skip/edit/substitute/create used to
+   end by forcing the person to tap an extra "ตกลง" button on a full
+   success screen before they could do anything else. That's one wasted
+   tap on every single action, all day. Now the working modal closes the
+   instant the action is confirmed, and this toast just confirms what
+   happened — auto-dismissing, with an "เลิกทำ" (undo) link when relevant. */
+function showActionToast(msg, undo){
+  const el = document.getElementById('actionToast');
+  if(!el) return;
+  el.innerHTML = `<span style="flex:1;">✓ ${msg}</span>` + (undo ? `<button class="toast-undo" id="toastUndoBtn">เลิกทำ</button>` : '');
+  el.classList.add('show');
+  clearTimeout(showActionToast._t);
+  showActionToast._t = setTimeout(()=>el.classList.remove('show'), undo ? 6000 : 3500);
+  if(undo){
+    document.getElementById('toastUndoBtn').onclick = ()=>{ undo(); el.classList.remove('show'); };
+  }
+}
+/* Kept as a thin wrapper so every existing call site (cancelQueue,
+   skipQueue, editQueue, substituteQueue flows) needs zero changes —
+   they already closeModal()+render() themselves before calling this. */
 function showSuccess(title, detail){
-  manageFlow = { type:'success', title, detail };
-  document.getElementById('modalBackdrop').classList.add('show');
-  renderManageModal();
+  showActionToast(detail ? `${title} — ${detail}` : title);
 }
 function openSkipModal(queueId){
   manageFlow = { type:'skip', queueId };
@@ -1238,18 +1260,6 @@ function renderManageModal(){
       if(!res.ok){document.getElementById('modalError').textContent=res.msg;return;}
       closeModal();render();
     };
-    return;
-  }
-
-  if(manageFlow && manageFlow.type==='success'){
-    body.innerHTML = `
-      <div class="success-state">
-        <div class="success-icon">✓</div>
-        <h3>${manageFlow.title}</h3>
-        <div class="step-note">${manageFlow.detail||''}</div>
-      </div>
-      <div class="modal-actions"><button class="btn-primary" id="successDone">ตกลง</button></div>`;
-    document.getElementById('successDone').onclick=closeModal;
     return;
   }
 
@@ -1508,8 +1518,9 @@ function renderModal(){
   if(addFlow.step===1){
     body.innerHTML = `
       <h3>เลือกพนักงาน</h3>
-      <div class="step-note">แตะชื่อของคุณเพื่อลงคิว</div>
+      <div class="step-note">แตะชื่อของคุณเพื่อลงคิวทันที</div>
       <div class="grid-pick" id="staffPick"></div>
+      <div class="error-msg" id="modalError"></div>
       <div class="modal-actions">
         <button class="btn-ghost" id="cancelBtn">ยกเลิก</button>
       </div>
@@ -1527,49 +1538,24 @@ function renderModal(){
           <div class="staff-brand">${brand?.name||'-'}</div>
         </span>`;
       btn.disabled = locked;
-      btn.onclick = ()=>{ addFlow.staffId = s.id; addFlow.step = 2; renderModal(); };
+      // Step-reduction fix: used to be pick → confirm → success (3 taps).
+      // A name in this grid is already a deliberate choice, so create the
+      // queue immediately and give an "เลิกทำ" undo window instead of
+      // making everyone tap through a redundant confirm screen first.
+      btn.onclick = ()=>{
+        const res = createQueue(s.id);
+        if(!res.ok){ document.getElementById('modalError').textContent = res.msg; return; }
+        const q = res.queue;
+        closeModal();
+        render();
+        showActionToast(`ลงคิว #${q.seq} ให้ ${s.name} แล้ว`, ()=>{
+          cancelQueue(q.id, session.role==='ADMIN'?'Admin':s.name, 'ลงคิวผิด');
+          render();
+        });
+      };
       pick.appendChild(btn);
     });
     document.getElementById('cancelBtn').onclick = closeModal;
-  }
-
-  else if(addFlow.step===2){
-    const staff = staffById(addFlow.staffId), brand = brandById(staff?.brandId);
-    body.innerHTML = `
-      <h3>ยืนยันการลงคิว</h3>
-      <div class="confirm-summary">
-        <div>พนักงาน: <strong>${staff?.name}</strong></div>
-        <div>แบรนด์: <strong>${brand?.name}</strong></div>
-        <div>เวลา: <strong class="mono">${fmtTime(nowTs())}</strong></div>
-      </div>
-      <div class="error-msg" id="modalError"></div>
-      <div class="modal-actions">
-        <button class="btn-ghost" id="backBtn">ย้อนกลับ</button>
-        <button class="btn-primary" id="confirmBtn">ยืนยัน สร้างคิว</button>
-      </div>
-    `;
-    document.getElementById('backBtn').onclick = ()=>{ addFlow.step=1; renderModal(); };
-    document.getElementById('confirmBtn').onclick = ()=>{
-      const res = createQueue(addFlow.staffId);
-      if(!res.ok){ document.getElementById('modalError').textContent = res.msg; return; }
-      addFlow.step = 3; addFlow.createdQueue = res.queue; renderModal();
-    };
-  }
-
-  else if(addFlow.step===3){
-    const q = addFlow.createdQueue;
-    const brand = brandById(q.brandId), staff = staffById(q.staffId);
-    body.innerHTML = `
-      <div class="success-ticket">
-        <div class="step-note">สร้างคิวสำเร็จ</div>
-        <div class="bignum mono">${q.seq}</div>
-        <div class="subline">👤 ${staff?.name} · 🎨 ${brand?.name} · ${fmtTime(q.createdAt)}</div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-primary" id="doneBtn">เสร็จสิ้น</button>
-      </div>
-    `;
-    document.getElementById('doneBtn').onclick = ()=>{ closeModal(); render(); };
   }
 }
 
