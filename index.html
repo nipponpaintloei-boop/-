@@ -118,13 +118,32 @@
   .board-lower .waiting-section{flex:2; min-width:0;}
   .recent-activity{flex:1; min-width:170px; max-width:340px; margin-bottom:28px;}
   .activity-list{display:flex; flex-direction:column; gap:8px; max-height:560px; overflow-y:auto; padding-right:2px;}
-  .activity-item{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:10px 12px; font-size:12.5px;}
+  .activity-item{background:var(--panel); border:1px solid var(--line); border-left:4px solid var(--line); border-radius:var(--radius); padding:10px 12px; font-size:12.5px;}
   .activity-item .a-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:3px;}
   .activity-item .a-who{display:flex; align-items:baseline; gap:6px; min-width:0;}
   .activity-item .a-actor{font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .activity-item .a-action{color:var(--focus); font-weight:600; white-space:nowrap;}
+  .activity-item .a-action{font-weight:600; white-space:nowrap;}
   .activity-item .a-time{color:var(--ink-faint); font-size:11px; white-space:nowrap; flex-shrink:0;}
   .activity-item .a-detail{color:var(--ink-dim); line-height:1.4;}
+  /* ---- Recent-activity color coding by action type ---- */
+  .activity-item.act-create{border-left-color:#475569;}
+  .activity-item.act-create .a-action{color:#475569;}
+  .activity-item.act-serving{border-left-color:var(--serving);}
+  .activity-item.act-serving .a-action{color:#15803d;}
+  .activity-item.act-done{border-left-color:var(--completed);}
+  .activity-item.act-done .a-action{color:var(--completed);}
+  .activity-item.act-return{border-left-color:#7C3AED;}
+  .activity-item.act-return .a-action{color:#7C3AED;}
+  .activity-item.act-skip{border-left-color:var(--skipped);}
+  .activity-item.act-skip .a-action{color:var(--skipped);}
+  .activity-item.act-cancel{border-left-color:var(--danger);}
+  .activity-item.act-cancel .a-action{color:var(--danger);}
+  .activity-item.act-edit{border-left-color:var(--focus);}
+  .activity-item.act-edit .a-action{color:var(--focus);}
+  .activity-item.act-swap{border-left-color:#0891B2;}
+  .activity-item.act-swap .a-action{color:#0891B2;}
+  .activity-item.act-admin{border-left-color:#94A3B8;}
+  .activity-item.act-admin .a-action{color:#64748B;}
   @media (max-width:760px){
     .board-lower{flex-direction:column;}
     .recent-activity{width:100%; max-width:none;}
@@ -515,6 +534,23 @@ function fmtDuration(ms){
 }
 function brandById(id){ return state.brands.find(b=>b.id===id); }
 function staffById(id){ return state.staff.find(s=>s.id===id); }
+
+// Maps an audit "action" label to a CSS class so Recent Activity rows
+// are color-coded by action type instead of all sharing one accent color.
+function actionClass(action){
+  switch(action){
+    case 'สร้างคิว': return 'act-create';
+    case 'เริ่มบริการ': return 'act-serving';
+    case 'จบ': return 'act-done';
+    case 'คืนคิว': return 'act-return';
+    case 'ข้ามคิว': return 'act-skip';
+    case 'ยกเลิกคิว': return 'act-cancel';
+    case 'แก้ไขคิว': return 'act-edit';
+    case 'แทนคิว (สลับชั่วคราว)':
+    case 'แทนคิว': return 'act-swap';
+    default: return 'act-admin'; // ตั้งค่า / เพิ่ม-ลบแบรนด์ / เพิ่ม-ลบพนักงาน / รีเซ็ตคิว
+  }
+}
 
 function logAudit(actorName, action, detail){
   state.audit.unshift({ ts: nowTs(), actor: actorName, action, detail });
@@ -1017,7 +1053,7 @@ function renderBoard(root){
     activityEl.innerHTML = `<div class="empty-note">ยังไม่มีการกระทำวันนี้</div>`;
   } else {
     activityEl.innerHTML = recentActivity.map(a=>`
-      <div class="activity-item">
+      <div class="activity-item ${actionClass(a.action)}">
         <div class="a-top">
           <span class="a-who">
             <span class="a-actor">${a.actor||'-'}</span>
