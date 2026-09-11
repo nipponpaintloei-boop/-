@@ -144,6 +144,27 @@
   .activity-item.act-swap .a-action{color:#0891B2;}
   .activity-item.act-admin{border-left-color:#94A3B8;}
   .activity-item.act-admin .a-action{color:#64748B;}
+
+  /* ---------- History: all actions of the day ---------- */
+  .haction-item{background:#fff;border:1px solid #e2e8f0;border-left:4px solid #cbd5e1;border-radius:12px;padding:12px 14px;margin-bottom:8px;box-shadow:0 2px 8px rgba(15,23,42,.03);}
+  .haction-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;}
+  .haction-who{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .haction-actor{font-weight:700;color:var(--ink);font-size:13.5px;}
+  .haction-action{font-weight:700;font-size:13px;}
+  .haction-time{color:var(--ink-faint);font-size:12px;flex-shrink:0;}
+  .haction-detail{color:var(--ink-dim);font-size:12.5px;margin-top:5px;line-height:1.5;}
+  .haction-badge{font-size:11px;font-weight:700;background:#f1f5f9;color:#475569;border-radius:6px;padding:2px 8px;}
+  .haction-foot{display:flex;justify-content:flex-end;margin-top:8px;}
+  .haction-item.act-create{border-left-color:#475569;} .haction-item.act-create .haction-action{color:#475569;}
+  .haction-item.act-serving{border-left-color:var(--serving);} .haction-item.act-serving .haction-action{color:#15803d;}
+  .haction-item.act-done{border-left-color:var(--completed);} .haction-item.act-done .haction-action{color:var(--completed);}
+  .haction-item.act-return{border-left-color:#7C3AED;} .haction-item.act-return .haction-action{color:#7C3AED;}
+  .haction-item.act-skip{border-left-color:var(--skipped);} .haction-item.act-skip .haction-action{color:var(--skipped);}
+  .haction-item.act-cancel{border-left-color:var(--danger);} .haction-item.act-cancel .haction-action{color:var(--danger);}
+  .haction-item.act-edit{border-left-color:var(--focus);} .haction-item.act-edit .haction-action{color:#946200;}
+  .haction-item.act-swap{border-left-color:#0891B2;} .haction-item.act-swap .haction-action{color:#0891B2;}
+  .haction-item.act-admin{border-left-color:#94A3B8;} .haction-item.act-admin .haction-action{color:#64748B;}
+  .history-day-count{font-weight:400;color:var(--ink-faint);}
   @media (max-width:760px){
     .board-lower{flex-direction:column;}
     .recent-activity{width:100%; max-width:none;}
@@ -552,8 +573,8 @@ function actionClass(action){
   }
 }
 
-function logAudit(actorName, action, detail){
-  state.audit.unshift({ ts: nowTs(), actor: actorName, action, detail });
+function logAudit(actorName, action, detail, queueId){
+  state.audit.unshift({ ts: nowTs(), actor: actorName, action, detail, queueId: queueId||null });
   // History/audit must never be discarded (Rule §5) — no trimming of this array.
 }
 
@@ -584,7 +605,7 @@ function createQueue(staffId, auto){
     completedAt: null,
   };
   state.queues.push(q);
-  logAudit(staff.name, "สร้างคิว", `ลำดับ ${q.seq} → ${brand?.name||'-'}${auto?' (ลงอัตโนมัติหลังจบงาน)':''}`);
+  logAudit(staff.name, "สร้างคิว", `ลำดับ ${q.seq} → ${brand?.name||'-'}${auto?' (ลงอัตโนมัติหลังจบงาน)':''}`, q.id);
   saveState();
   return {ok:true, queue:q};
 }
@@ -595,7 +616,7 @@ function callQueue(queueId, callerName){
   q.status = "SERVING";
   q.calledAt = nowTs();
   q.calledBy = callerName;
-  logAudit(staffById(q.staffId)?.name || callerName, "เริ่มบริการ", `ลำดับ ${q.seq}`);
+  logAudit(staffById(q.staffId)?.name || callerName, "เริ่มบริการ", `ลำดับ ${q.seq}`, q.id);
   saveState();
 }
 
@@ -604,7 +625,7 @@ function completeQueue(queueId, actorName){
   if(!q || q.status!=="SERVING") return;
   q.status = "COMPLETED";
   q.completedAt = nowTs();
-  logAudit(actorName, "จบ", `ลำดับ ${q.seq}`);
+  logAudit(actorName, "จบ", `ลำดับ ${q.seq}`, q.id);
   saveState();
 }
 
@@ -620,7 +641,7 @@ function returnQueueToWaiting(queueId, actorName){
   q.calledAt = null;
   q.calledBy = null;
   addChangeLog(q, actorName, "คืนคิว", before, {status:"WAITING"}, "กดขึ้นคิวผิดพลาด — คืนคิวกลับไปที่ลำดับเดิม");
-  logAudit(actorName, "คืนคิว", `ลำดับ ${q.seq} ถูกคืนกลับไปเป็นคิวที่รอ (แก้ไขจากการกดขึ้นคิวผิดพลาด)`);
+  logAudit(actorName, "คืนคิว", `ลำดับ ${q.seq} ถูกคืนกลับไปเป็นคิวที่รอ (แก้ไขจากการกดขึ้นคิวผิดพลาด)`, q.id);
   saveState();
   return {ok:true};
 }
@@ -633,7 +654,7 @@ function skipQueue(queueId, actorName, reason){
   q.completedAt = nowTs();
   q.skipReason = reason.trim();
   addChangeLog(q, actorName, "ข้ามคิว", {status:"WAITING"}, {status:"SKIPPED"}, reason);
-  logAudit(actorName, "ข้ามคิว", `ลำดับ ${q.seq} — เหตุผล: ${reason.trim()}`);
+  logAudit(actorName, "ข้ามคิว", `ลำดับ ${q.seq} — เหตุผล: ${reason.trim()}`, q.id);
   saveState();
   return {ok:true};
 }
@@ -666,7 +687,7 @@ function cancelQueue(queueId, actorName, reason){
   q.deletedBy = actorName;
   q.deleteReason = reason.trim();
   addChangeLog(q, actorName, "ยกเลิกคิว", before, {status:"DELETED"}, reason);
-  logAudit(actorName, "ยกเลิกคิว", `ลำดับ ${q.seq} (${staff?.name||'-'}) เดิมสถานะ: ${STATUS_LABEL_TH[before.status]||before.status} — เหตุผล: ${reason.trim()}`);
+  logAudit(actorName, "ยกเลิกคิว", `ลำดับ ${q.seq} (${staff?.name||'-'}) เดิมสถานะ: ${STATUS_LABEL_TH[before.status]||before.status} — เหตุผล: ${reason.trim()}`, q.id);
   saveState();
   return {ok:true};
 }
@@ -707,7 +728,7 @@ function editQueueStaff(queueId, newStaffId, actorName, reason){
   q.brandId = newStaff.brandId;
   const after = { staffId:q.staffId, staffName:newStaff.name, brandId:q.brandId, brandName:brandById(q.brandId)?.name };
   addChangeLog(q, actorName, "แก้ไขคิว", before, after, reason);
-  logAudit(actorName, "แก้ไขคิว", `ลำดับ ${q.seq}: ${before.staffName} (${before.brandName}) → ${after.staffName} (${after.brandName}) — เหตุผล: ${reason.trim()}`);
+  logAudit(actorName, "แก้ไขคิว", `ลำดับ ${q.seq}: ${before.staffName} (${before.brandName}) → ${after.staffName} (${after.brandName}) — เหตุผล: ${reason.trim()}`, q.id);
   saveState();
   return {ok:true};
 }
@@ -753,7 +774,7 @@ function substituteQueueSwap(oldQueueId, coveringQueueId, actorName, reason){
 
   addChangeLog(oldQ, actorName, "สลับคิว", {seq:oldSeqBefore}, {seq:oldQ.seq}, trimmedReason);
   addChangeLog(coveringQ, actorName, "สลับคิว", {seq:coveringSeqBefore}, {seq:coveringQ.seq}, trimmedReason);
-  logAudit(actorName, "แทนคิว (สลับชั่วคราว)", `สลับตำแหน่งคิว #${oldSeqBefore} (${oldStaff?.name||'-'}) ↔ #${coveringSeqBefore} (${newStaff?.name||'-'}) — เหตุผล: ${trimmedReason}`);
+  logAudit(actorName, "แทนคิว (สลับชั่วคราว)", `สลับตำแหน่งคิว #${oldSeqBefore} (${oldStaff?.name||'-'}) ↔ #${coveringSeqBefore} (${newStaff?.name||'-'}) — เหตุผล: ${trimmedReason}`, oldQ.id);
   saveState();
   return {ok:true, oldSeqBefore, coveringSeqBefore};
 }
@@ -775,7 +796,7 @@ function substituteQueueReplace(oldQueueId, coveringQueueId, actorName, reason){
   // Covering ticket takes over the vacated position, stays WAITING.
   coveringQ.seq = oldSeqBefore;
   addChangeLog(coveringQ, actorName, "รับช่วงคิว", {seq:coveringSeqBefore}, {seq:coveringQ.seq}, trimmedReason);
-  logAudit(actorName, "แทนคิว", `#${oldSeqBefore} (${oldStaff?.name||'-'}) ถูกยกเลิก — ${newStaff?.name||'-'} รับช่วงต่อที่ตำแหน่ง #${oldSeqBefore} (เดิม #${coveringSeqBefore}) — เหตุผล: ${trimmedReason}`);
+  logAudit(actorName, "แทนคิว", `#${oldSeqBefore} (${oldStaff?.name||'-'}) ถูกยกเลิก — ${newStaff?.name||'-'} รับช่วงต่อที่ตำแหน่ง #${oldSeqBefore} (เดิม #${coveringSeqBefore}) — เหตุผล: ${trimmedReason}`, coveringQ.id);
   saveState();
   return {ok:true, oldSeqBefore, coveringSeqBefore};
 }
@@ -1077,11 +1098,12 @@ function downloadXLS(filename, headers, rows){
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 function exportHistoryXLS(){
-  const rows=[...(state.queues||[])].sort((a,b)=>b.createdAt-a.createdAt).map(q=>{
-    const b=brandById(q.brandId), st=staffById(q.staffId);
-    return [todayKey(q.createdAt),fmtTime(q.createdAt),q.seq,b?.name||'-',st?.name||'-',STATUS_LABEL_TH[q.status]||q.status,q.calledAt?fmtTime(q.calledAt):'',q.completedAt?fmtTime(q.completedAt):'',q.status==='COMPLETED'&&q.calledAt&&q.completedAt?fmtDuration(q.completedAt-q.calledAt):'',q.deleteReason||q.skipReason||''];
+  const rows=[...(state.audit||[])].sort((a,b)=>b.ts-a.ts).map(a=>{
+    const q = a.queueId ? state.queues.find(x=>x.id===a.queueId) : null;
+    const brand = q ? brandById(q.brandId) : null;
+    return [dateLabelTH(a.ts),fmtTime(a.ts),a.actor||'',a.action||'',q?`#${q.seq}`:'',brand?.name||'',a.detail||''];
   });
-  downloadXLS(`paint-queue-history-${new Date().toISOString().slice(0,10)}.xls`,['วันที่','เวลาลงคิว','ลำดับ','แบรนด์','พนักงาน','สถานะ','เวลาเริ่มบริการ','เวลาจบ','ระยะเวลาบริการ','เหตุผล'],rows);
+  downloadXLS(`paint-queue-history-${new Date().toISOString().slice(0,10)}.xls`,['วันที่','เวลา','ผู้ทำรายการ','การกระทำ','ลำดับคิว','แบรนด์','รายละเอียด'],rows);
 }
 function exportAuditXLS(){
   const rows=[...(state.audit||[])].sort((a,b)=>b.ts-a.ts).map(a=>[fmtTime(a.ts),a.actor||'',a.action||'',a.detail||'']);
@@ -1106,119 +1128,115 @@ function dayColorFor(dateKey){
   for(let i=0;i<dateKey.length;i++) hash = (hash*31 + dateKey.charCodeAt(i)) >>> 0;
   return DAY_COLOR_PALETTE[hash % DAY_COLOR_PALETTE.length];
 }
+// Every entry a person can filter History by, mapped to the same
+// act-* accent used in Recent Activity, so the two views read consistently.
+const HISTORY_TYPE_FILTERS = [
+  {cls:'act-create', label:'ลงคิว'},
+  {cls:'act-serving', label:'เริ่มบริการ'},
+  {cls:'act-done', label:'จบคิว'},
+  {cls:'act-return', label:'คืนคิว'},
+  {cls:'act-skip', label:'ข้ามคิว'},
+  {cls:'act-cancel', label:'ยกเลิกคิว'},
+  {cls:'act-edit', label:'แก้ไขคิว'},
+  {cls:'act-swap', label:'แทนคิว'},
+  {cls:'act-admin', label:'อื่นๆ / ระบบ'},
+];
 function renderHistory(root){
-  // distinct calendar days present in the data, newest first
-  const dateKeys = Array.from(new Set(state.queues.map(q=>todayKey(q.createdAt)))).sort((a,b)=>b.localeCompare(a));
+  // History now shows every action of each day (not one card per ticket) —
+  // state.audit is already a flat, never-trimmed log of every action taken
+  // (Rule §5), so it is the source of truth for this view.
+  const dateKeys = Array.from(new Set((state.audit||[]).map(a=>todayKey(a.ts)))).sort((a,b)=>b.localeCompare(a));
 
   root.innerHTML = `
     <div class="toolbar">
       <button class="btn-export" id="exportHistoryBtn">⇩ Export XLS</button>
-      <input type="text" id="histSearch" placeholder="ค้นหาลำดับ / พนักงาน">
+      <input type="text" id="histSearch" placeholder="ค้นหาผู้ทำรายการ / ลำดับ / รายละเอียด">
       <select id="histDate"><option value="">ทุกวัน</option></select>
-      <select id="histBrand"><option value="">ทุกแบรนด์</option></select>
-      <select id="histStatus">
-        <option value="">ทุกสถานะ</option>
-        <option value="WAITING">รอ</option>
-        <option value="SERVING">กำลังบริการ</option>
-        <option value="COMPLETED">เสร็จ</option>
-        <option value="SKIPPED">ข้าม</option>
-        <option value="DELETED">ยกเลิกแล้ว</option>
+      <select id="histType">
+        <option value="">ทุกประเภทการกระทำ</option>
+        ${HISTORY_TYPE_FILTERS.map(t=>`<option value="${t.cls}">${t.label}</option>`).join('')}
       </select>
     </div>
     <div id="historyTimeline"></div>
   `;
-  const brandSel = document.getElementById('histBrand');
-  state.brands.forEach(b=>{
-    const o = document.createElement('option'); o.value=b.id; o.textContent=b.name; brandSel.appendChild(o);
-  });
   const dateSel = document.getElementById('histDate');
   const today = todayKey();
   dateKeys.forEach(k=>{
     const o = document.createElement('option'); o.value=k;
-    // grab any queue on that day just to format a label from its timestamp
-    const sample = state.queues.find(q=>todayKey(q.createdAt)===k);
-    o.textContent = dateLabelTH(sample.createdAt) + (k===today ? ' (วันนี้)' : '');
+    const sample = (state.audit||[]).find(a=>todayKey(a.ts)===k);
+    o.textContent = dateLabelTH(sample.ts) + (k===today ? ' (วันนี้)' : '');
     dateSel.appendChild(o);
   });
 
-  function eventTime(ts){ return ts ? fmtTime(ts) : '—'; }
-  function eventCard(icon, cls, title, time, detail){
-    return `<div class="history-event ${cls}"><div class="history-event-dot">${icon}</div><div class="history-event-main"><div class="history-event-top"><strong>${title}</strong><span class="mono">${eventTime(time)}</span></div><div class="history-event-detail">${detail||''}</div></div></div>`;
-  }
-  function statRow(label, value){
-    // Improvement #1: skip stat cells that have no real value yet (e.g. a
-    // queue that's still waiting has no service/total time) instead of
-    // showing a bare em-dash.
-    if(value==='—') return '';
-    return `<div><span>${label}</span><b>${value}</b></div>`;
-  }
-  function actionsCell(q, hasLog, canManage, canEditStaff){
-    // Improvement #4: collapse the row of separate buttons into one
-    // "จัดการ" (manage) menu so the footer doesn't get button-crowded.
-    const items = [];
-    if(hasLog) items.push(`<button class="menu-item" onclick="closeAllManageMenus();openLogModal('${q.id}')">🕘 ประวัติการแก้ไข (${q.changeLog.length})</button>`);
-    if(canManage){
-      // Fix: a COMPLETED queue can no longer be reassigned to a different
-      // staff member — that would silently move the sale credit after the
-      // fact. Cancel is still offered as the legitimate correction path.
-      if(canEditStaff) items.push(`<button class="menu-item" onclick="closeAllManageMenus();openEditModal('${q.id}')">แก้ไข</button>`);
-      items.push(`<button class="menu-item danger" onclick="closeAllManageMenus();openCancelModal('${q.id}')">ยกเลิก</button>`);
-    } else if(session.role==='STAFF' && q.status!=='DELETED'){
-      items.push(`<button class="menu-item danger" onclick="closeAllManageMenus();openCancelModal('${q.id}')">ยกเลิก</button>`);
+  function actionItemHtml(a, rowKey){
+    const cls = actionClass(a.action);
+    const q = a.queueId ? state.queues.find(x=>x.id===a.queueId) : null;
+    let badge = '';
+    if(q){
+      const brand = brandById(q.brandId);
+      const swatch = brand ? `<span class="swatch" style="background:${brand.color};width:8px;height:8px;display:inline-block;margin-right:4px;border-radius:2px;"></span>` : '';
+      badge = `<span class="haction-badge">${swatch}#${q.seq}${brand?` · ${brand.name}`:''}</span>`;
     }
-    if(!items.length) return '—';
-    return `<div class="manage-menu"><button class="btn-manage" onclick="toggleManageMenu(event,'${q.id}')">จัดการ ▾</button><div class="manage-menu-list" id="menu-${q.id}">${items.join('')}</div></div>`;
-  }
-  function ticketHtml(q){
-    const brand=brandById(q.brandId), staff=staffById(q.staffId);
-    const wait=q.calledAt&&q.createdAt ? fmtDuration(q.calledAt-q.createdAt) : '—';
-    const service=q.calledAt&&q.completedAt ? fmtDuration(q.completedAt-q.calledAt) : '—';
-    const total=q.completedAt&&q.createdAt ? fmtDuration(q.completedAt-q.createdAt) : '—';
-    const statusLabel=STATUS_LABEL_TH[q.status]||q.status;
-    const reason=(q.deleteReason||q.skipReason||'');
-    const hasLog=q.changeLog&&q.changeLog.length&&isSupervisorPlus();
-    const canManage=isSupervisorPlus()&&q.status!=='DELETED';
-    const canEditStaff=canManage&&q.status!=='COMPLETED';
-    let events=eventCard('＋','create','ลงคิว',q.createdAt,`คิว <b>#${q.seq}</b> · ${brand?.name||'-'} · พนักงาน ${staff?.name||'-'}`);
-    if(q.calledAt) events+=eventCard('☎','call','ขึ้นคิว',q.calledAt,`เริ่มบริการโดย ${q.calledBy||staff?.name||'-'} · รอคิว <b>${wait}</b>`);
-    if(q.completedAt){
-      if(q.status==='COMPLETED') events+=eventCard('✓','complete','จบคิว',q.completedAt,`ใช้เวลาบริการ <b>${service}</b> · เวลารวมตั้งแต่ลงคิว <b>${total}</b>`);
-      else if(q.status==='SKIPPED') events+=eventCard('→','skip','ข้ามคิว',q.completedAt,`เหตุผล: <b>${reason||'—'}</b>`);
-      else if(q.status==='DELETED') events+=eventCard('×','cancel','ยกเลิกคิว',q.completedAt,`เหตุผล: <b>${reason||'—'}</b>`);
+    // Manage actions still live per-ticket (edit/cancel/view edit-log), so
+    // a supervisor can act directly from the day feed on whichever ticket
+    // an action row refers to — same permission rules as before.
+    let manage = '';
+    if(q){
+      const hasLog = q.changeLog && q.changeLog.length && isSupervisorPlus();
+      const canManage = isSupervisorPlus() && q.status!=='DELETED';
+      const canEditStaff = canManage && q.status!=='COMPLETED';
+      const items = [];
+      if(hasLog) items.push(`<button class="menu-item" onclick="closeAllManageMenus();openLogModal('${q.id}')">🕘 ประวัติการแก้ไข (${q.changeLog.length})</button>`);
+      if(canManage){
+        if(canEditStaff) items.push(`<button class="menu-item" onclick="closeAllManageMenus();openEditModal('${q.id}')">แก้ไข</button>`);
+        items.push(`<button class="menu-item danger" onclick="closeAllManageMenus();openCancelModal('${q.id}')">ยกเลิก</button>`);
+      } else if(session.role==='STAFF' && q.status!=='DELETED'){
+        items.push(`<button class="menu-item danger" onclick="closeAllManageMenus();openCancelModal('${q.id}')">ยกเลิก</button>`);
+      }
+      if(items.length){
+        manage = `<div class="haction-foot"><div class="manage-menu"><button class="btn-manage" onclick="toggleManageMenu(event,'${rowKey}')">จัดการ ▾</button><div class="manage-menu-list" id="menu-${rowKey}">${items.join('')}</div></div></div>`;
+      }
     }
-    // Improvement #1: only show the stat cells that actually have a value.
-    const stats=[statRow('รอคิว',wait), statRow('บริการ',service), statRow('รวม',total)].join('');
-    const dayColor = dayColorFor(todayKey(q.createdAt));
-    return `<section class="history-ticket" style="--day-color:${dayColor}"><div class="history-ticket-head"><div><span class="history-ticket-idgroup"><span class="history-ticket-id">#${q.seq}</span><span class="history-ticket-date mono">${dateLabelTH(q.createdAt)}</span></span><span class="status-pill ${q.status}">${statusLabel}</span></div><div class="history-ticket-meta"><span class="history-ticket-staff">👤 ${staff?.name||'-'}</span>${brand?.name||'-'}</div></div><div class="history-timeline">${events}</div><div class="history-ticket-foot">${stats}<div class="history-actions">${actionsCell(q,hasLog,canManage,canEditStaff)}</div></div></section>`;
+    return `<div class="haction-item ${cls}">
+      <div class="haction-top">
+        <div class="haction-who">
+          <span class="haction-actor">${a.actor||'-'}</span>
+          <span class="haction-action">${a.action||''}</span>
+          ${badge}
+        </div>
+        <span class="haction-time mono">${fmtTime(a.ts)}</span>
+      </div>
+      ${a.detail?`<div class="haction-detail">${a.detail}</div>`:''}
+      ${manage}
+    </div>`;
   }
+
   function draw(){
     const term = document.getElementById('histSearch').value.trim().toLowerCase();
-    const brandF = document.getElementById('histBrand').value;
-    const statusF = document.getElementById('histStatus').value;
+    const typeF = document.getElementById('histType').value;
     const dateF = document.getElementById('histDate').value;
-    const filtersActive = !!(term || brandF || statusF || dateF);
-    const rows = state.queues
-      .filter(q=>{
-        const staff = staffById(q.staffId);
-        if(dateF && todayKey(q.createdAt)!==dateF) return false;
-        if(brandF && q.brandId!==brandF) return false;
-        if(statusF && q.status!==statusF) return false;
-        if(term && !(String(q.seq).includes(term) || (staff?.name||'').toLowerCase().includes(term))) return false;
+    const filtersActive = !!(term || typeF || dateF);
+    const rows = [...(state.audit||[])]
+      .sort((a,b)=>b.ts-a.ts)
+      .filter(a=>{
+        if(dateF && todayKey(a.ts)!==dateF) return false;
+        if(typeF && actionClass(a.action)!==typeF) return false;
+        if(term){
+          const q = a.queueId ? state.queues.find(x=>x.id===a.queueId) : null;
+          const hay = `${a.actor||''} ${a.action||''} ${a.detail||''} ${q?q.seq:''}`.toLowerCase();
+          if(!hay.includes(term)) return false;
+        }
         return true;
-      })
-      .sort((a,b)=>b.createdAt-a.createdAt);
+      });
     const list = document.getElementById('historyTimeline');
     if(!rows.length){
-      // Improvement #5: tell the person WHY it's empty, and give a way out
-      // when it's their filters (not the whole dataset) that are empty.
       list.innerHTML = filtersActive
-        ? `<div class="empty-note">ไม่พบคิวที่ตรงกับตัวกรองที่เลือก <button class="btn-ghost" id="clearFiltersBtn">ล้างตัวกรอง</button></div>`
-        : `<div class="empty-note">ยังไม่มีคิวในระบบ</div>`;
+        ? `<div class="empty-note">ไม่พบการกระทำที่ตรงกับตัวกรองที่เลือก <button class="btn-ghost" id="clearFiltersBtn">ล้างตัวกรอง</button></div>`
+        : `<div class="empty-note">ยังไม่มีการกระทำในระบบ</div>`;
       if(filtersActive){
         document.getElementById('clearFiltersBtn').onclick = ()=>{
           document.getElementById('histSearch').value='';
-          document.getElementById('histBrand').value='';
-          document.getElementById('histStatus').value='';
+          document.getElementById('histType').value='';
           document.getElementById('histDate').value='';
           draw();
         };
@@ -1226,27 +1244,27 @@ function renderHistory(root){
       return;
     }
 
-    // Improvement #2: sticky date-group headers so people can tell at a
-    // glance which day they're scrolling through, without touching the
-    // date dropdown.
+    // Sticky date-group headers, same as before, but now each group holds
+    // every action of that day rather than one card per ticket.
     let html = '';
     let lastKey = null;
-    rows.forEach(q=>{
-      const dk = todayKey(q.createdAt);
+    let dayCount = 0;
+    rows.forEach((a, i)=>{
+      const dk = todayKey(a.ts);
       if(dk !== lastKey){
         lastKey = dk;
         const dc = dayColorFor(dk);
-        html += `<div class="hist-date-header" style="--day-color:${dc}"><span class="hist-date-dot"></span>${dateLabelTH(q.createdAt)}${dk===today?' (วันนี้)':''}</div>`;
+        dayCount = rows.filter(r=>todayKey(r.ts)===dk).length;
+        html += `<div class="hist-date-header" style="--day-color:${dc}"><span class="hist-date-dot"></span>${dateLabelTH(a.ts)}${dk===today?' (วันนี้)':''} <span class="history-day-count">— ${dayCount} การกระทำ</span></div>`;
       }
-      html += ticketHtml(q);
+      html += actionItemHtml(a, 'h'+i);
     });
     list.innerHTML = html;
   }
   document.getElementById('histSearch').oninput=draw;
   document.getElementById('exportHistoryBtn').onclick=exportHistoryXLS;
   document.getElementById('histDate').onchange=draw;
-  document.getElementById('histBrand').onchange=draw;
-  document.getElementById('histStatus').onchange=draw;
+  document.getElementById('histType').onchange=draw;
   draw();
 }
 
