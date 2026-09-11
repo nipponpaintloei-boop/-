@@ -509,7 +509,7 @@ function createQueue(staffId, auto){
   const staff = staffById(staffId);
   if(!staff) return {ok:false, msg:"ข้อมูลไม่ถูกต้อง"};
   const brand = brandById(staff.brandId);
-  if(staffHasActiveQueue(staffId)) return {ok:false, msg:`⚠️ ${staff.name} มีคิวที่ยังไม่จบ — ต้องกด "จบการบริการ" ก่อน`};
+  if(staffHasActiveQueue(staffId)) return {ok:false, msg:`⚠️ ${staff.name} มีคิวที่ยังไม่จบ — ต้องกด "จบคิว" ก่อน`};
   const q = {
     id: uid(),
     seq: nextSeq(),
@@ -611,7 +611,7 @@ function editQueueStaff(queueId, newStaffId, actorName, reason){
   const q = state.queues.find(x=>x.id===queueId);
   if(!q) return {ok:false, msg:"ไม่พบคิว"};
   if(q.status==="DELETED") return {ok:false, msg:"ไม่สามารถแก้ไขคิวที่ถูกยกเลิกแล้วได้"};
-  if(q.status==="COMPLETED") return {ok:false, msg:"คิวนี้จบการบริการแล้ว ไม่สามารถเปลี่ยนพนักงานย้อนหลังได้ (ป้องกันการสลับเครดิตคิว)"};
+  if(q.status==="COMPLETED") return {ok:false, msg:"คิวนี้จบแล้ว ไม่สามารถเปลี่ยนพนักงานย้อนหลังได้ (ป้องกันการสลับเครดิตคิว)"};
   if(!reason || reason.trim().length < 3) return {ok:false, msg:"กรุณาระบุเหตุผลในการแก้ไขคิว (อย่างน้อย 3 ตัวอักษร)"};
   const newStaff = staffById(newStaffId);
   if(!newStaff) return {ok:false, msg:"ข้อมูลพนักงานไม่ถูกต้อง"};
@@ -790,7 +790,7 @@ function renderBoard(root){
         <div class="who">👤 ${staff?.name||'-'}</div>
         <div class="brandline"><span class="swatch" style="background:${brand?.color||'#888'}"></span>${brand?.name||'-'}</div>
         <div class="since">เริ่มบริการ ${fmtClock(q.calledAt)}</div>
-        <button class="btn-complete" ${canWrite()?'':'disabled style="opacity:.4;cursor:not-allowed;"'}>✓ จบการบริการ</button>
+        <button class="btn-complete" ${canWrite()?'':'disabled style="opacity:.4;cursor:not-allowed;"'}>✓ จบคิว</button>
         ${canCancelQueue(q)?`<button class="btn-skip" data-return-waiting style="width:100%;margin-top:6px;color:var(--skipped);border-color:var(--skipped);">↩ คืนคิว</button>`:''}
       `;
       el.querySelector('.btn-complete').onclick = ()=>{
@@ -1001,7 +1001,7 @@ function renderHistory(root){
     let events=eventCard('＋','create','ลงคิว',q.createdAt,`คิว <b>#${q.seq}</b> · ${brand?.name||'-'} · พนักงาน ${staff?.name||'-'}`);
     if(q.calledAt) events+=eventCard('☎','call','ขึ้นคิว',q.calledAt,`เริ่มบริการโดย ${q.calledBy||staff?.name||'-'} · รอคิว <b>${wait}</b>`);
     if(q.completedAt){
-      if(q.status==='COMPLETED') events+=eventCard('✓','complete','จบการบริการ',q.completedAt,`ใช้เวลาบริการ <b>${service}</b> · เวลารวมตั้งแต่ลงคิว <b>${total}</b>`);
+      if(q.status==='COMPLETED') events+=eventCard('✓','complete','จบคิว',q.completedAt,`ใช้เวลาบริการ <b>${service}</b> · เวลารวมตั้งแต่ลงคิว <b>${total}</b>`);
       else if(q.status==='SKIPPED') events+=eventCard('→','skip','ข้ามคิว',q.completedAt,`เหตุผล: <b>${reason||'—'}</b>`);
       else if(q.status==='DELETED') events+=eventCard('×','cancel','ยกเลิกคิว',q.completedAt,`เหตุผล: <b>${reason||'—'}</b>`);
     }
@@ -1115,7 +1115,7 @@ function renderAdmin(root){
       <label class="settings-toggle-row" for="autoRequeueToggle">
         <div class="settings-toggle-copy">
           <div class="settings-toggle-title">ลงคิวใหม่อัตโนมัติหลังจบงาน</div>
-          <div class="step-note" style="margin:2px 0 0;">พอกด "จบการบริการ" ระบบลงคิวใหม่ให้พนักงานคนนั้นทันที เหมือนที่แผนกเคยลบชื่อใน Notepad แล้วเขียนต่อท้ายใหม่ — กด "เลิกทำ" ในข้อความแจ้งเตือนได้เสมอถ้ารอบนั้นไม่รับคิวต่อ</div>
+          <div class="step-note" style="margin:2px 0 0;">พอกด "จบคิว" ระบบลงคิวใหม่ให้พนักงานคนนั้นทันที เหมือนที่แผนกเคยลบชื่อใน Notepad แล้วเขียนต่อท้ายใหม่ — กด "เลิกทำ" ในข้อความแจ้งเตือนได้เสมอถ้ารอบนั้นไม่รับคิวต่อ</div>
         </div>
         <span class="settings-toggle-wrap">
           <input type="checkbox" id="autoRequeueToggle" ${state.settings.autoRequeue?'checked':''}>
