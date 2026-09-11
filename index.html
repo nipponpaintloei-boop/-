@@ -132,13 +132,23 @@
 
   /* ---------- Waiting queue ---------- */
   section.waiting-section{margin-bottom:28px;}
-  .waiting-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .waiting-head{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
+  .waiting-head-left{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  .waiting-head-right{display:flex; align-items:center; gap:8px;}
+  .select-all-wrap{display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink-dim); cursor:pointer; user-select:none;}
+  .btn-bulk-mode{background:transparent; color:var(--ink-dim); border:1px solid var(--line); padding:9px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;}
+  .btn-bulk-mode:hover{border-color:var(--ink-dim);}
+  .btn-bulk-cancel{background:var(--danger); color:#fff; border:none; padding:9px 14px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;}
+  .btn-bulk-cancel:disabled{opacity:.4; cursor:not-allowed;}
   .waiting-list{display:flex; flex-direction:column; gap:8px;}
   .wrow{
     display:grid; grid-template-columns:64px 1fr 90px auto; align-items:center;
     gap:12px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
     padding:12px 14px;
   }
+  .wrow.wrow-bulk{grid-template-columns:22px 64px 1fr 90px auto;}
+  .wrow.wrow-selected{border-color:var(--danger); box-shadow:0 0 0 1px var(--danger) inset;}
+  .wrow .wchk{width:16px; height:16px; cursor:pointer; accent-color:var(--danger);}
   .wrow .qno{font-weight:700; font-size:20px;}
   .wrow .mid{display:flex; align-items:center; gap:10px; min-width:0;}
   .wrow .staffname{font-size:14.5px; color:var(--ink); font-weight:600;}
@@ -150,6 +160,7 @@
 
   /* ---------- Modal ---------- */
   .modal-backdrop{
+
     position:fixed; inset:0; background:rgba(15,23,42,.42); display:none;
     align-items:center; justify-content:center; z-index:50; padding:16px;
   }
@@ -624,6 +635,24 @@ function cancelQueue(queueId, actorName, reason){
   return {ok:true};
 }
 
+/* Bulk variant: runs cancelQueue for each id and keeps going even if one
+   fails (e.g. someone else already served/cancelled it in the meantime),
+   so one stale row can't block the rest of the batch. Every ticket still
+   gets its own changeLog + audit entry — nothing about the per-ticket
+   trail changes, this just drives the same function N times. */
+function bulkCancelQueues(queueIds, actorName, reason){
+  const okSeqs = [];
+  const failed = [];
+  queueIds.forEach(id=>{
+    const q = state.queues.find(x=>x.id===id);
+    const seq = q?.seq;
+    const res = cancelQueue(id, actorName, reason);
+    if(res.ok) okSeqs.push(seq);
+    else failed.push({seq, msg:res.msg});
+  });
+  return {okCount:okSeqs.length, okSeqs, failed};
+}
+
 function editQueueStaff(queueId, newStaffId, actorName, reason){
   const q = state.queues.find(x=>x.id===queueId);
   if(!q) return {ok:false, msg:"ไม่พบคิว"};
@@ -782,8 +811,19 @@ function renderBoard(root){
     <div class="board-lower">
       <section class="waiting-section">
         <div class="waiting-head">
-          <h2 class="section-title" style="margin:0;">คิวที่รอ (WAITING) — เรียงตามลำดับที่ลงคิว</h2>
-          <button class="btn-board-add" id="boardAddBtn">＋ ลงคิวใหม่</button>
+          <div class="waiting-head-left">
+            <h2 class="section-title" style="margin:0;">คิวที่รอ (WAITING) — เรียงตามลำดับที่ลงคิว</h2>
+            ${bulkSelectMode?`<label class="select-all-wrap"><input type="checkbox" id="selectAllWaiting"> เลือกทั้งหมด</label>`:''}
+          </div>
+          <div class="waiting-head-right">
+            ${bulkSelectMode ? `
+              <button class="btn-bulk-mode" id="exitBulkModeBtn">✕ ยกเลิกโหมดเลือก</button>
+              <button class="btn-bulk-cancel" id="bulkCancelBtn">ยกเลิกที่เลือก (<span id="bulkCancelCount">0</span>)</button>
+            ` : `
+              <button class="btn-bulk-mode" id="enterBulkModeBtn">ยกเลิกหลายรายการ</button>
+            `}
+            <button class="btn-board-add" id="boardAddBtn">＋ ลงคิวใหม่</button>
+          </div>
         </div>
         <div class="waiting-list" id="waitingList"></div>
       </section>
@@ -858,14 +898,29 @@ function renderBoard(root){
   }
 
   const listEl = document.getElementById('waitingList');
+  // prune selections that no longer exist in the current waiting list
+  // (ticket got served, cancelled elsewhere, etc.) before rendering checkboxes
+  const waitingIds = new Set(waiting.map(q=>q.id));
+  Array.from(bulkSelectedIds).forEach(id=>{ if(!waitingIds.has(id)) bulkSelectedIds.delete(id); });
+
+  const updateBulkControls = ()=>{
+    const countEl = document.getElementById('bulkCancelCount');
+    const btn = document.getElementById('bulkCancelBtn');
+    const selectAll = document.getElementById('selectAllWaiting');
+    if(countEl) countEl.textContent = bulkSelectedIds.size;
+    if(btn) btn.disabled = bulkSelectedIds.size===0 || !canWrite();
+    if(selectAll) selectAll.checked = waiting.length>0 && bulkSelectedIds.size===waiting.length;
+  };
+
   if(waiting.length===0){
     listEl.innerHTML = `<div class="empty-note">ไม่มีคิวรอในขณะนี้</div>`;
   } else {
     waiting.forEach(q=>{
       const brand = brandById(q.brandId), staff = staffById(q.staffId);
       const row = document.createElement('div');
-      row.className = 'wrow';
+      row.className = 'wrow' + (bulkSelectMode?' wrow-bulk':'') + (bulkSelectMode && bulkSelectedIds.has(q.id)?' wrow-selected':'');
       row.innerHTML = `
+        ${bulkSelectMode?`<input type="checkbox" class="wchk" ${bulkSelectedIds.has(q.id)?'checked':''} ${canWrite()?'':'disabled'}>`:''}
         <div class="qno mono">${q.seq}${q.changeLog&&q.changeLog.length?` <span style="font-size:11px;color:var(--focus);font-weight:600;">✎${q.changeLog.length}</span>`:''}</div>
         <div class="mid">
           <span class="swatch" style="background:${brand?.color||'#888'}"></span>
@@ -877,6 +932,14 @@ function renderBoard(root){
         <div class="time mono">${fmtClock(q.createdAt)}</div>
         <div class="wrow-actions"></div>
       `;
+      if(bulkSelectMode){
+        row.querySelector('.wchk').onchange = (e)=>{
+          if(!canWrite()) return;
+          if(e.target.checked) bulkSelectedIds.add(q.id); else bulkSelectedIds.delete(q.id);
+          row.classList.toggle('wrow-selected', e.target.checked);
+          updateBulkControls();
+        };
+      }
       const actions = row.querySelector('.wrow-actions');
       const callBtn = document.createElement('button');
       callBtn.className = 'btn-call';
@@ -909,10 +972,49 @@ function renderBoard(root){
     });
   }
 
+  updateBulkControls();
+  const enterBulkModeBtn = document.getElementById('enterBulkModeBtn');
+  if(enterBulkModeBtn){
+    enterBulkModeBtn.disabled = !canWrite();
+    enterBulkModeBtn.onclick = ()=>{
+      if(!canWrite()) return;
+      bulkSelectMode = true;
+      renderBoard(root);
+    };
+  }
+  const exitBulkModeBtn = document.getElementById('exitBulkModeBtn');
+  if(exitBulkModeBtn){
+    exitBulkModeBtn.onclick = ()=>{
+      bulkSelectMode = false;
+      bulkSelectedIds.clear();
+      renderBoard(root);
+    };
+  }
+  const selectAllEl = document.getElementById('selectAllWaiting');
+  if(selectAllEl){
+    selectAllEl.disabled = !canWrite();
+    selectAllEl.onchange = (e)=>{
+      if(!canWrite()) return;
+      if(e.target.checked) waiting.forEach(q=>bulkSelectedIds.add(q.id));
+      else bulkSelectedIds.clear();
+      renderBoard(root);
+    };
+  }
+  const bulkCancelBtn = document.getElementById('bulkCancelBtn');
+  if(bulkCancelBtn){
+    bulkCancelBtn.onclick = ()=>{ if(canWrite() && bulkSelectedIds.size>0) openBulkCancelModal(Array.from(bulkSelectedIds)); };
+  }
+
   const activityEl = document.getElementById('activityList');
-  const recentActivity = (state.audit||[]).slice(0, 20); // already newest-first (logAudit unshifts)
+  // Rule §14 follow-up: the board resets to a new day (seq counter, waiting
+  // list) but the audit trail itself is never deleted — so without a date
+  // filter here, "Recent Activity" would keep showing yesterday's rows
+  // forever. Scope it to today's device-local calendar day only; full
+  // history is still always available under History / Audit Log.
+  const today = todayKey();
+  const recentActivity = (state.audit||[]).filter(a=>todayKey(a.ts)===today).slice(0, 20); // already newest-first (logAudit unshifts)
   if(recentActivity.length===0){
-    activityEl.innerHTML = `<div class="empty-note">ยังไม่มีการกระทำ</div>`;
+    activityEl.innerHTML = `<div class="empty-note">ยังไม่มีการกระทำวันนี้</div>`;
   } else {
     activityEl.innerHTML = recentActivity.map(a=>`
       <div class="activity-item">
@@ -1297,6 +1399,15 @@ function closeModal(){
    object so the two never collide.
    ========================================================= */
 let manageFlow = null;
+// Rule: cancelling several tickets at once (e.g. a whole line group that
+// walked away together) should not require opening the single-cancel modal
+// N times. bulkSelectedIds holds queue ids checked on the waiting board;
+// it is pruned every render to drop ids that left the waiting list (served,
+// already cancelled, etc.) so stale checkmarks can never linger.
+let bulkSelectedIds = new Set();
+// Checkboxes only appear on the waiting list once this is true (toggled by
+// the "ยกเลิกหลายรายการ" button), so the board stays uncluttered by default.
+let bulkSelectMode = false;
 const REASON_BOX = `style="width:100%;margin-top:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:10px;font-family:inherit;font-size:13.5px;resize:vertical;"`;
 
 /* Step-reduction fix: every cancel/skip/edit/substitute/create used to
@@ -1330,6 +1441,12 @@ function openSkipModal(queueId){
 
 function openCancelModal(queueId){
   manageFlow = { type:'cancel', queueId };
+  document.getElementById('modalBackdrop').classList.add('show');
+  renderManageModal();
+}
+function openBulkCancelModal(ids){
+  if(!ids || ids.length===0) return;
+  manageFlow = { type:'bulk-cancel', ids:[...ids] };
   document.getElementById('modalBackdrop').classList.add('show');
   renderManageModal();
 }
@@ -1373,6 +1490,58 @@ function renderManageModal(){
     return;
   }
 
+  // Bulk-cancel flow also has no single queueId (it carries an ids array),
+  // so it's handled here too, before the single-queue lookup below.
+  if(manageFlow && manageFlow.type==='bulk-cancel'){
+    const targets = manageFlow.ids.map(id=>state.queues.find(x=>x.id===id)).filter(Boolean);
+    if(targets.length===0){ closeModal(); return; }
+    const rowsHtml = targets.map(t=>{
+      const st = staffById(t.staffId), br = brandById(t.brandId);
+      return `<div style="font-size:13px;padding:4px 0;border-bottom:1px dashed var(--line);"><strong>#${t.seq}</strong> — ${st?.name||'-'} · ${br?.name||'-'}</div>`;
+    }).join('');
+    body.innerHTML = `
+      <h3>ยกเลิกคิวที่เลือก (${targets.length} รายการ)</h3>
+      <div class="step-note">คิวทั้งหมดด้านล่างจะถูกยกเลิกด้วยเหตุผลเดียวกัน และยังคงปรากฏใน "ประวัติ" และ "Audit Log" เสมอ เพื่อป้องกันการโกง/ทุจริตคิว</div>
+      <div style="max-height:160px;overflow-y:auto;margin-bottom:10px;">${rowsHtml}</div>
+      <div>เหตุผลในการยกเลิก (จำเป็น) :</div>
+      <select id="reasonPreset" class="reason-select">
+        <option value="">— เลือกเหตุผล —</option>
+        <option>กินข้าว</option>
+        <option>ยืนข้างหน้า</option>
+        <option>ลงคิวผิด</option>
+        <option>ยืนแทนคิว</option>
+        <option>ไม่อยู่ในแผนก</option>
+        <option>ไม่รับคิว</option>
+        <option>เปลี่ยนฝั่งยืน</option>
+        <option value="OTHER">อื่นๆ (ระบุเอง)</option>
+      </select>
+      <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
+      <div class="error-msg" id="modalError"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="cancelBtn">ยกเลิก</button>
+        <button class="btn-primary" id="confirmBtn" style="background:var(--danger);color:#fff;">ยืนยันยกเลิก ${targets.length} คิว</button>
+      </div>
+    `;
+    document.getElementById('cancelBtn').onclick = closeModal;
+    document.getElementById('confirmBtn').onclick = ()=>{
+      const preset = document.getElementById('reasonPreset').value;
+      const typed = document.getElementById('reasonInput').value.trim();
+      const reason = preset === 'OTHER' ? typed : (typed ? `${preset} — ${typed}` : preset);
+      if(!reason || reason.trim().length < 3){ document.getElementById('modalError').textContent = 'กรุณาพิมพ์เหตุผลในการยกเลิกคิว (อย่างน้อย 3 ตัวอักษร)'; return; }
+      const actor = session.role==='ADMIN'?'Admin':'พนักงานขาย';
+      const res = bulkCancelQueues(manageFlow.ids, actor, reason);
+      bulkSelectedIds.clear();
+      bulkSelectMode = false;
+      closeModal(); render();
+      if(res.failed.length===0){
+        showSuccess('ยกเลิกคิวสำเร็จ', `ยกเลิก ${res.okCount} คิว (#${res.okSeqs.join(', #')}) และบันทึกไว้ในประวัติเรียบร้อยแล้ว`);
+      } else {
+        showSuccess('ยกเลิกคิวสำเร็จบางส่วน', `สำเร็จ ${res.okCount} คิว — ไม่สำเร็จ ${res.failed.length} คิว (อาจถูกจัดการไปแล้วก่อนหน้า)`);
+      }
+    };
+    return;
+  }
+
   const q = state.queues.find(x=>x.id===manageFlow.queueId);
   if(!q){ closeModal(); return; }
   const staff = staffById(q.staffId), brand = brandById(q.brandId);
@@ -1391,6 +1560,7 @@ function renderManageModal(){
         <option>ยืนแทนคิว</option>
         <option>ไม่อยู่ในแผนก</option>
         <option>ไม่รับคิว</option>
+        <option>เปลี่ยนฝั่งยืน</option>
         <option value="OTHER">อื่นๆ (ระบุเอง)</option>
       </select>
       <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
