@@ -113,6 +113,23 @@
   .btn-complete:active{transform:scale(.98);}
   .empty-note{color:var(--ink-faint); font-size:13.5px; padding:10px 2px;}
 
+  /* ---------- Board lower area: waiting queue + recent activity ---------- */
+  .board-lower{display:flex; gap:16px; align-items:flex-start;}
+  .board-lower .waiting-section{flex:2; min-width:0;}
+  .recent-activity{flex:1; min-width:170px; max-width:340px; margin-bottom:28px;}
+  .activity-list{display:flex; flex-direction:column; gap:8px; max-height:560px; overflow-y:auto; padding-right:2px;}
+  .activity-item{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:10px 12px; font-size:12.5px;}
+  .activity-item .a-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin-bottom:3px;}
+  .activity-item .a-who{display:flex; align-items:baseline; gap:6px; min-width:0;}
+  .activity-item .a-actor{font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .activity-item .a-action{color:var(--focus); font-weight:600; white-space:nowrap;}
+  .activity-item .a-time{color:var(--ink-faint); font-size:11px; white-space:nowrap; flex-shrink:0;}
+  .activity-item .a-detail{color:var(--ink-dim); line-height:1.4;}
+  @media (max-width:760px){
+    .board-lower{flex-direction:column;}
+    .recent-activity{width:100%; max-width:none;}
+  }
+
   /* ---------- Waiting queue ---------- */
   section.waiting-section{margin-bottom:28px;}
   .waiting-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
@@ -762,13 +779,20 @@ function renderBoard(root){
       <div class="serving-cards" id="servingCards"></div>
     </section>
 
-    <section class="waiting-section">
-      <div class="waiting-head">
-        <h2 class="section-title" style="margin:0;">คิวที่รอ (WAITING) — เรียงตามลำดับที่ลงคิว</h2>
-        <button class="btn-board-add" id="boardAddBtn">＋ ลงคิวใหม่</button>
-      </div>
-      <div class="waiting-list" id="waitingList"></div>
-    </section>
+    <div class="board-lower">
+      <section class="waiting-section">
+        <div class="waiting-head">
+          <h2 class="section-title" style="margin:0;">คิวที่รอ (WAITING) — เรียงตามลำดับที่ลงคิว</h2>
+          <button class="btn-board-add" id="boardAddBtn">＋ ลงคิวใหม่</button>
+        </div>
+        <div class="waiting-list" id="waitingList"></div>
+      </section>
+
+      <section class="recent-activity">
+        <h2 class="section-title">การกระทำล่าสุด (RECENT ACTIVITY)</h2>
+        <div class="activity-list" id="activityList"></div>
+      </section>
+    </div>
   `;
 
   const boardAddBtn = document.getElementById('boardAddBtn');
@@ -883,6 +907,25 @@ function renderBoard(root){
       }
       listEl.appendChild(row);
     });
+  }
+
+  const activityEl = document.getElementById('activityList');
+  const recentActivity = (state.audit||[]).slice(0, 20); // already newest-first (logAudit unshifts)
+  if(recentActivity.length===0){
+    activityEl.innerHTML = `<div class="empty-note">ยังไม่มีการกระทำ</div>`;
+  } else {
+    activityEl.innerHTML = recentActivity.map(a=>`
+      <div class="activity-item">
+        <div class="a-top">
+          <span class="a-who">
+            <span class="a-actor">${a.actor||'-'}</span>
+            <span class="a-action">${a.action||''}</span>
+          </span>
+          <span class="a-time mono">${fmtTime(a.ts)}</span>
+        </div>
+        ${a.detail?`<div class="a-detail">${a.detail}</div>`:''}
+      </div>
+    `).join('');
   }
 }
 
