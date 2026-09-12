@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="dropGrad" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"  stop-color="#E8542A"/>
+      <stop offset="16%" stop-color="#F2A900"/>
+      <stop offset="33%" stop-color="#2E8B57"/>
+      <stop offset="50%" stop-color="#17A6A0"/>
+      <stop offset="67%" stop-color="#1F5FA8"/>
+      <stop offset="84%" stop-color="#6A3FA0"/>
+      <stop offset="100%" stop-color="#C81E3A"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#20262E"/>
+  <path d="M32 9 C32 9 15 31.5 15 43.5 C15 53.7 22.6 61 32 61 C41.4 61 49 53.7 49 43.5 C49 31.5 32 9 32 9 Z"
+        fill="url(#dropGrad)"/>
+  <ellipse cx="24.5" cy="34" rx="5" ry="9" fill="#FFFFFF" opacity="0.32"/>
+</svg>
