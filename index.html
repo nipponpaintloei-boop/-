@@ -55,6 +55,7 @@
   .action-toast{background:#15803D; display:flex; align-items:center; gap:10px;}
   .action-toast .toast-undo{background:transparent; border:1px solid rgba(255,255,255,.5); color:#fff; padding:5px 11px; border-radius:7px; font-size:12.5px; cursor:pointer; flex-shrink:0;}
   .action-toast .toast-undo:hover{background:rgba(255,255,255,.15);}
+  .noon-reminder-toast{background:#0D9488;}
 
   /* ---------- App shell ---------- */
   .app{max-width:1180px;margin:0 auto;padding:18px 20px 60px;}
@@ -144,6 +145,10 @@
   .activity-item.act-swap .a-action{color:#0891B2;}
   .activity-item.act-admin{border-left-color:#94A3B8;}
   .activity-item.act-admin .a-action{color:#64748B;}
+  .activity-item.act-noonswap{border-left-color:#0D9488;}
+  .activity-item.act-noonswap .a-action{color:#0D9488;}
+  .activity-item.act-reorder{border-left-color:#CA8A04;}
+  .activity-item.act-reorder .a-action{color:#CA8A04;}
 
   /* ---------- History: all actions of the day ---------- */
   .haction-item{background:#fff;border:1px solid #e2e8f0;border-left:4px solid #cbd5e1;border-radius:12px;padding:12px 14px;margin-bottom:8px;box-shadow:0 2px 8px rgba(15,23,42,.03);}
@@ -154,6 +159,9 @@
   .haction-time{color:var(--ink-faint);font-size:12px;flex-shrink:0;}
   .haction-detail{color:var(--ink-dim);font-size:12.5px;margin-top:5px;line-height:1.5;}
   .haction-badge{font-size:11px;font-weight:700;background:#f1f5f9;color:#475569;border-radius:6px;padding:2px 8px;}
+  .haction-halfday{font-size:10.5px;font-weight:700;border-radius:20px;padding:2px 8px;flex-shrink:0;}
+  .haction-halfday.am{background:#FEF3C7;color:#92400E;}
+  .haction-halfday.pm{background:#E0E7FF;color:#3730A3;}
   .haction-foot{display:flex;justify-content:flex-end;margin-top:8px;}
   .haction-item.act-create{border-left-color:#475569;} .haction-item.act-create .haction-action{color:#475569;}
   .haction-item.act-serving{border-left-color:var(--serving);} .haction-item.act-serving .haction-action{color:#15803d;}
@@ -164,6 +172,8 @@
   .haction-item.act-edit{border-left-color:var(--focus);} .haction-item.act-edit .haction-action{color:#946200;}
   .haction-item.act-swap{border-left-color:#0891B2;} .haction-item.act-swap .haction-action{color:#0891B2;}
   .haction-item.act-admin{border-left-color:#94A3B8;} .haction-item.act-admin .haction-action{color:#64748B;}
+  .haction-item.act-noonswap{border-left-color:#0D9488;} .haction-item.act-noonswap .haction-action{color:#0D9488;}
+  .haction-item.act-reorder{border-left-color:#CA8A04;} .haction-item.act-reorder .haction-action{color:#CA8A04;}
   .history-day-count{font-weight:400;color:var(--ink-faint);}
   @media (max-width:760px){
     .board-lower{flex-direction:column;}
@@ -180,15 +190,22 @@
   .btn-bulk-mode:hover{border-color:var(--ink-dim);}
   .btn-bulk-cancel{background:var(--danger); color:#fff; border:none; padding:9px 14px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;}
   .btn-bulk-cancel:disabled{opacity:.4; cursor:not-allowed;}
+  .btn-noonswap{background:transparent; color:#0D9488; border:1px solid #0D9488; padding:9px 14px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;}
+  .btn-noonswap:hover{background:#F0FDFA;}
+  .btn-noonswap:disabled{opacity:.4; cursor:not-allowed;}
   .waiting-list{display:flex; flex-direction:column; gap:8px;}
   .wrow{
-    display:grid; grid-template-columns:64px 1fr 90px auto; align-items:center;
+    display:grid; grid-template-columns:22px 64px 1fr 90px auto; align-items:center;
     gap:12px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
     padding:12px 14px;
   }
   .wrow.wrow-bulk{grid-template-columns:22px 64px 1fr 90px auto;}
   .wrow.wrow-selected{border-color:var(--danger); box-shadow:0 0 0 1px var(--danger) inset;}
   .wrow .wchk{width:16px; height:16px; cursor:pointer; accent-color:var(--danger);}
+  .wrow .drag-handle{cursor:grab; color:var(--ink-faint); font-size:15px; line-height:1; text-align:center; user-select:none;}
+  .wrow .drag-handle:active{cursor:grabbing;}
+  .wrow.dragging{opacity:.4;}
+  .wrow.drag-over-top{box-shadow:inset 0 3px 0 0 var(--focus);}
   .wrow .qno{font-weight:700; font-size:20px;}
   .wrow .mid{display:flex; align-items:center; gap:10px; min-width:0;}
   .wrow .staffname{font-size:14.5px; color:var(--ink); font-weight:600;}
@@ -246,6 +263,7 @@
   .status-pill.COMPLETED{background:#EFF6FF; color:var(--completed);}
   .status-pill.SKIPPED{background:#FFF7ED; color:var(--skipped);}
   .status-pill.DELETED{background:#FEF2F2; color:var(--danger);}
+  .status-pill.SWAP_CANCELLED{background:#F0FDFA; color:#0D9488;}
   .btn-log{background:transparent; color:var(--focus); border:1px solid var(--focus); padding:6px 9px; border-radius:7px; font-size:11.5px; cursor:pointer;}
 
   .audit-line{font-size:12.5px; padding:6px 0; border-bottom:1px dashed var(--line); color:var(--ink-dim);}
@@ -311,6 +329,11 @@ table.hist tr:hover td{background:#f8fafc;}
 @media(max-width:1100px){table.hist{font-size:13px}table.hist th,table.hist td{padding:9px 7px!important}}
 
 .reason-select{width:100%;margin-top:8px;background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:10px;font-family:inherit;font-size:13.5px;}
+/* Reason chips: tap a card instead of opening a dropdown first. */
+.reason-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.reason-chip{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:20px;padding:9px 14px;font-size:13.5px;cursor:pointer;line-height:1.2;}
+.reason-chip:hover{border-color:var(--ink-dim);}
+.reason-chip.selected{background:var(--focus);border-color:var(--focus);color:#231B05;font-weight:700;}
 .btn-export{margin-left:auto;background:#fff;color:#2563eb;border:1px solid #93c5fd;padding:9px 13px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;}
 .btn-export:hover{background:#eff6ff;}
 .section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
@@ -353,6 +376,7 @@ table.hist tr:hover td{background:#f8fafc;}
 
 <div id="dailyResetToast" class="daily-reset-toast"></div>
 <div id="actionToast" class="daily-reset-toast action-toast"></div>
+<div id="noonReminderToast" class="daily-reset-toast noon-reminder-toast"></div>
 
 <div class="app">
 
@@ -432,6 +456,7 @@ function freshState(){
     queues: [],
     audit: [],
     lastActiveDate: todayKey(),
+    lastNoonReminderDate: null,
     settings: { autoRequeue: false },
   };
 }
@@ -446,6 +471,9 @@ function loadState(){
     // Stamp it with today rather than forcing a reset on the very next
     // load — a real day-change will still be caught on its own next load.
     if(typeof parsed.lastActiveDate !== "string") parsed.lastActiveDate = todayKey();
+    // Older saved states (before the noon-reminder feature) won't have this
+    // yet either — default to null so the reminder can still fire today.
+    if(typeof parsed.lastNoonReminderDate !== "string") parsed.lastNoonReminderDate = null;
     // Older saved states won't have a settings object yet either.
     if(!parsed.settings || typeof parsed.settings !== "object") parsed.settings = { autoRequeue:false };
     if(typeof parsed.settings.autoRequeue !== "boolean") parsed.settings.autoRequeue = false;
@@ -515,6 +543,34 @@ function showDailyResetToast(info){
   showDailyResetToast._t = setTimeout(()=>el.classList.remove('show'), 7000);
 }
 
+/* =========================================================
+   NOON REMINDER — a nudge only, never an automatic reset.
+   ---------------------------------------------------------
+   The department deliberately rejected an automatic timer for
+   the actual side-swap reset (Rule: staff must press "เตรียม
+   สลับฝั่ง" themselves). This is different: it's just a one-time-
+   per-day toast once local clock time passes 12:00, so staff
+   don't forget the swap is due — it does not touch any queue.
+   Tracked by date (not a boolean) so it naturally re-arms every
+   day, and only ever fires once per day even across reloads.
+   ========================================================= */
+function checkNoonReminder(){
+  const today = todayKey();
+  if(state.lastNoonReminderDate === today) return false;
+  if(new Date().getHours() < 12) return false;
+  state.lastNoonReminderDate = today;
+  saveState();
+  return true;
+}
+function showNoonReminderToast(){
+  const el = document.getElementById('noonReminderToast');
+  if(!el) return;
+  el.textContent = `🕛 ถึงเวลาเที่ยงแล้ว — ถ้าเครื่องนี้ถึงกำหนดสลับฝั่ง อย่าลืมกด "เตรียมสลับฝั่ง"`;
+  el.classList.add('show');
+  clearTimeout(showNoonReminderToast._t);
+  showNoonReminderToast._t = setTimeout(()=>el.classList.remove('show'), 8000);
+}
+
 /* current simulated session — role only. Device is detected for real (see isMobileDevice). */
 let session = {
   role: "STAFF",          // STAFF | SUPERVISOR | ADMIN
@@ -569,6 +625,9 @@ function actionClass(action){
     case 'แก้ไขคิว': return 'act-edit';
     case 'แทนคิว (สลับชั่วคราว)':
     case 'แทนคิว': return 'act-swap';
+    case 'ยกเลิกคิว (สลับฝั่ง)':
+    case 'รีเซ็ตคิว — สลับฝั่ง': return 'act-noonswap';
+    case 'เลื่อนคิว': return 'act-reorder';
     default: return 'act-admin'; // ตั้งค่า / เพิ่ม-ลบแบรนด์ / เพิ่ม-ลบพนักงาน / รีเซ็ตคิว
   }
 }
@@ -667,7 +726,12 @@ function skipQueue(queueId, actorName, reason){
      AND to the global audit trail, so it is always
      retrospectively reviewable (who/when/what/why)
    ========================================================= */
-const STATUS_LABEL_TH = {WAITING:'รอ', SERVING:'กำลังบริการ', COMPLETED:'เสร็จ', SKIPPED:'ข้าม', DELETED:'ยกเลิกแล้ว'};
+const STATUS_LABEL_TH = {WAITING:'รอ', SERVING:'กำลังบริการ', COMPLETED:'เสร็จ', SKIPPED:'ข้าม', DELETED:'ยกเลิกแล้ว', SWAP_CANCELLED:'ยกเลิก-สลับฝั่ง'};
+// DELETED (manual/bulk cancel, day-change auto-close) and SWAP_CANCELLED
+// (noon side-swap reset) are both terminal — a ticket in either state is
+// off the board for good and never re-editable. Kept as one helper so
+// every guard below stays consistent as new terminal statuses are added.
+function isTerminalStatus(status){ return status==="DELETED" || status==="SWAP_CANCELLED"; }
 
 function addChangeLog(q, actorName, action, before, after, reason){
   q.changeLog = q.changeLog || [];
@@ -677,7 +741,7 @@ function addChangeLog(q, actorName, action, before, after, reason){
 function cancelQueue(queueId, actorName, reason){
   const q = state.queues.find(x=>x.id===queueId);
   if(!q) return {ok:false, msg:"ไม่พบคิว"};
-  if(q.status==="DELETED") return {ok:false, msg:"คิวนี้ถูกยกเลิกไปแล้ว"};
+  if(isTerminalStatus(q.status)) return {ok:false, msg:"คิวนี้ถูกยกเลิกไปแล้ว"};
   if(!reason || reason.trim().length < 3) return {ok:false, msg:"กรุณาพิมพ์เหตุผลในการยกเลิกคิว (อย่างน้อย 3 ตัวอักษร)"};
   const staff = staffById(q.staffId);
   const before = { status:q.status };
@@ -713,7 +777,7 @@ function bulkCancelQueues(queueIds, actorName, reason){
 function editQueueStaff(queueId, newStaffId, actorName, reason){
   const q = state.queues.find(x=>x.id===queueId);
   if(!q) return {ok:false, msg:"ไม่พบคิว"};
-  if(q.status==="DELETED") return {ok:false, msg:"ไม่สามารถแก้ไขคิวที่ถูกยกเลิกแล้วได้"};
+  if(isTerminalStatus(q.status)) return {ok:false, msg:"ไม่สามารถแก้ไขคิวที่ถูกยกเลิกแล้วได้"};
   if(q.status==="COMPLETED") return {ok:false, msg:"คิวนี้จบแล้ว ไม่สามารถเปลี่ยนพนักงานย้อนหลังได้ (ป้องกันการสลับเครดิตคิว)"};
   if(!reason || reason.trim().length < 3) return {ok:false, msg:"กรุณาระบุเหตุผลในการแก้ไขคิว (อย่างน้อย 3 ตัวอักษร)"};
   const newStaff = staffById(newStaffId);
@@ -802,6 +866,73 @@ function substituteQueueReplace(oldQueueId, coveringQueueId, actorName, reason){
 }
 
 /* =========================================================
+   DRAG-TO-REORDER — fixing a wrong queue position by dragging
+   a waiting ticket and dropping it in front of another one.
+   ---------------------------------------------------------
+   Unlike "แทนคิว" (substitute, same-brand only, requires a typed
+   reason and can cancel a ticket), this is a plain position fix:
+   both tickets stay WAITING, nobody is cancelled, any brand can
+   be dragged past any other, and no reason prompt interrupts the
+   drag — it's meant to be as fast as physically re-ordering a
+   paper ticket stack. Every ticket whose position actually moves
+   still gets its own changeLog entry (own history stays complete
+   per ticket), and one consolidated line lands in Recent
+   Activity / History / Audit so the drag itself is traceable:
+   who moved whom, from which position to which. */
+function reorderWaitingQueue(draggedId, targetId, actorName){
+  if(draggedId===targetId) return {ok:false, msg:"ไม่มีการเปลี่ยนแปลง"};
+  const waitingSorted = state.queues.filter(q=>q.status==="WAITING").sort((a,b)=>a.seq-b.seq);
+  const draggedIdx = waitingSorted.findIndex(q=>q.id===draggedId);
+  const targetIdx = waitingSorted.findIndex(q=>q.id===targetId);
+  if(draggedIdx===-1 || targetIdx===-1) return {ok:false, msg:"ไม่พบคิวที่จะเลื่อน"};
+
+  const draggedQ = waitingSorted[draggedIdx];
+  const targetQ = waitingSorted[targetIdx];
+  const oldSeq = draggedQ.seq;
+  const targetSeqBefore = targetQ.seq;
+
+  // Take the dragged ticket out, then drop it back in right where the
+  // target ticket now sits — everyone from the target's old spot onward
+  // (up to the dragged ticket's old spot) shifts by exactly one place,
+  // same as physically pulling one card out of a stack and reinserting it.
+  const arr = waitingSorted.slice();
+  arr.splice(draggedIdx, 1);
+  const insertAt = arr.findIndex(q=>q.id===targetId);
+  arr.splice(insertAt, 0, draggedQ);
+
+  // Reassign the SAME set of queue numbers that already existed among
+  // these waiting tickets, just in the new order — nothing is renumbered
+  // beyond this group, nothing is invented or skipped.
+  const seqPool = waitingSorted.map(q=>q.seq).sort((a,b)=>a-b);
+  const changed = [];
+  arr.forEach((q,i)=>{
+    const newSeq = seqPool[i];
+    if(q.seq !== newSeq) changed.push({q, before:q.seq, after:newSeq});
+  });
+  changed.forEach(({q,after})=>{ q.seq = after; });
+
+  const staffName = staffById(draggedQ.staffId)?.name || '-';
+  const targetStaffName = staffById(targetQ.staffId)?.name || '-';
+  const newSeq = draggedQ.seq;
+
+  changed.forEach(({q,before,after})=>{
+    if(q.id===draggedQ.id){
+      addChangeLog(q, actorName, "เลื่อนคิว", {seq:before}, {seq:after},
+        `ลากคิวจากอันดับ #${before} มาแทรกที่อันดับ #${after} (แทนที่ตำแหน่งของ ${targetStaffName})`);
+    } else {
+      addChangeLog(q, actorName, "ลำดับเปลี่ยน (ถูกเลื่อน)", {seq:before}, {seq:after},
+        `อันดับขยับจาก #${before} เป็น #${after} เนื่องจาก ${staffName} ถูกลากแทรกเข้ามา`);
+    }
+  });
+
+  logAudit(actorName, "เลื่อนคิว",
+    `${staffName}: อันดับคิว #${oldSeq} → #${newSeq} (แทรกก่อนคิวของ ${targetStaffName}, เดิมอันดับ #${targetSeqBefore})`,
+    draggedQ.id);
+  saveState();
+  return {ok:true, staffName, oldSeq, newSeq};
+}
+
+/* =========================================================
    RENDER — top chrome
    ========================================================= */
 function renderChrome(){
@@ -878,6 +1009,7 @@ function renderBoard(root){
               <button class="btn-bulk-cancel" id="bulkCancelBtn">ยกเลิกที่เลือก (<span id="bulkCancelCount">0</span>)</button>
             ` : `
               <button class="btn-bulk-mode" id="enterBulkModeBtn">ยกเลิกหลายรายการ</button>
+              <button class="btn-noonswap" id="noonSwapBtn">🔁 เตรียมสลับฝั่ง</button>
             `}
             <button class="btn-board-add" id="boardAddBtn">＋ ลงคิวใหม่</button>
           </div>
@@ -977,7 +1109,9 @@ function renderBoard(root){
       const row = document.createElement('div');
       row.className = 'wrow' + (bulkSelectMode?' wrow-bulk':'') + (bulkSelectMode && bulkSelectedIds.has(q.id)?' wrow-selected':'');
       row.innerHTML = `
-        ${bulkSelectMode?`<input type="checkbox" class="wchk" ${bulkSelectedIds.has(q.id)?'checked':''} ${canWrite()?'':'disabled'}>`:''}
+        ${bulkSelectMode
+          ? `<input type="checkbox" class="wchk" ${bulkSelectedIds.has(q.id)?'checked':''} ${canWrite()?'':'disabled'}>`
+          : `<span class="drag-handle" title="กดค้างแล้วลากเพื่อเลื่อนลำดับคิว">⠿</span>`}
         <div class="qno mono">${q.seq}${q.changeLog&&q.changeLog.length?` <span style="font-size:11px;color:var(--focus);font-weight:600;">✎${q.changeLog.length}</span>`:''}</div>
         <div class="mid">
           <span class="swatch" style="background:${brand?.color||'#888'}"></span>
@@ -996,6 +1130,43 @@ function renderBoard(root){
           row.classList.toggle('wrow-selected', e.target.checked);
           updateBulkControls();
         };
+      } else if(canWrite()){
+        // Drag-to-reorder: grabbing any row and dropping it on another
+        // moves it to right before that row's current spot (see
+        // reorderWaitingQueue for exactly how the shift is computed).
+        row.draggable = true;
+        row.addEventListener('dragstart', (e)=>{
+          draggedQueueId = q.id;
+          row.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          try{ e.dataTransfer.setData('text/plain', q.id); }catch(err){}
+        });
+        row.addEventListener('dragend', ()=>{
+          row.classList.remove('dragging');
+          listEl.querySelectorAll('.wrow.drag-over-top').forEach(el=>el.classList.remove('drag-over-top'));
+          draggedQueueId = null;
+        });
+        row.addEventListener('dragover', (e)=>{
+          if(!draggedQueueId || draggedQueueId===q.id) return;
+          e.preventDefault();
+          row.classList.add('drag-over-top');
+        });
+        row.addEventListener('dragleave', ()=>{
+          row.classList.remove('drag-over-top');
+        });
+        row.addEventListener('drop', (e)=>{
+          e.preventDefault();
+          row.classList.remove('drag-over-top');
+          const fromId = draggedQueueId;
+          draggedQueueId = null;
+          if(!fromId || fromId===q.id) return;
+          const actor = session.role==='ADMIN'?'Admin':'พนักงานขาย';
+          const res = reorderWaitingQueue(fromId, q.id, actor);
+          if(res.ok){
+            render();
+            showActionToast(`เลื่อนคิว ${res.staffName} — อันดับ #${res.oldSeq} → #${res.newSeq}`);
+          }
+        });
       }
       const actions = row.querySelector('.wrow-actions');
       const callBtn = document.createElement('button');
@@ -1046,6 +1217,11 @@ function renderBoard(root){
       bulkSelectedIds.clear();
       renderBoard(root);
     };
+  }
+  const noonSwapBtn = document.getElementById('noonSwapBtn');
+  if(noonSwapBtn){
+    noonSwapBtn.disabled = !canWrite();
+    noonSwapBtn.onclick = ()=>{ if(canWrite()) openNoonSwapModal(); };
   }
   const selectAllEl = document.getElementById('selectAllWaiting');
   if(selectAllEl){
@@ -1116,6 +1292,14 @@ function exportAuditXLS(){
 function dateLabelTH(ts){
   return new Date(ts).toLocaleDateString('th-TH', {day:'numeric', month:'short'});
 }
+/* Follow-up to the noon side-swap flow: staff reviewing History need to
+   tell at a glance whether a given action happened before or after that
+   day's swap, without having to read every timestamp. A plain AM/PM split
+   at 12:00 is the simplest marker that matches how the department already
+   talks about it ("ก่อนเที่ยง" / "หลังเที่ยง"). */
+function halfDayLabel(ts){
+  return new Date(ts).getHours() < 12 ? {cls:'am', text:'ก่อนเที่ยง'} : {cls:'pm', text:'หลังเที่ยง'};
+}
 /* Fix: the #seq resets to 1 every day (Rule §14), so "#5" alone is
    ambiguous once History spans more than one day. Every ticket now
    carries its date in the SAME visual weight as the number (not a
@@ -1139,6 +1323,8 @@ const HISTORY_TYPE_FILTERS = [
   {cls:'act-cancel', label:'ยกเลิกคิว'},
   {cls:'act-edit', label:'แก้ไขคิว'},
   {cls:'act-swap', label:'แทนคิว'},
+  {cls:'act-noonswap', label:'สลับฝั่ง'},
+  {cls:'act-reorder', label:'เลื่อนคิว'},
   {cls:'act-admin', label:'อื่นๆ / ระบบ'},
 ];
 function renderHistory(root){
@@ -1183,20 +1369,21 @@ function renderHistory(root){
     let manage = '';
     if(q){
       const hasLog = q.changeLog && q.changeLog.length && isSupervisorPlus();
-      const canManage = isSupervisorPlus() && q.status!=='DELETED';
+      const canManage = isSupervisorPlus() && !isTerminalStatus(q.status);
       const canEditStaff = canManage && q.status!=='COMPLETED';
       const items = [];
       if(hasLog) items.push(`<button class="menu-item" onclick="closeAllManageMenus();openLogModal('${q.id}')">🕘 ประวัติการแก้ไข (${q.changeLog.length})</button>`);
       if(canManage){
         if(canEditStaff) items.push(`<button class="menu-item" onclick="closeAllManageMenus();openEditModal('${q.id}')">แก้ไข</button>`);
         items.push(`<button class="menu-item danger" onclick="closeAllManageMenus();openCancelModal('${q.id}')">ยกเลิก</button>`);
-      } else if(session.role==='STAFF' && q.status!=='DELETED'){
+      } else if(session.role==='STAFF' && !isTerminalStatus(q.status)){
         items.push(`<button class="menu-item danger" onclick="closeAllManageMenus();openCancelModal('${q.id}')">ยกเลิก</button>`);
       }
       if(items.length){
         manage = `<div class="haction-foot"><div class="manage-menu"><button class="btn-manage" onclick="toggleManageMenu(event,'${rowKey}')">จัดการ ▾</button><div class="manage-menu-list" id="menu-${rowKey}">${items.join('')}</div></div></div>`;
       }
     }
+    const hd = halfDayLabel(a.ts);
     return `<div class="haction-item ${cls}">
       <div class="haction-top">
         <div class="haction-who">
@@ -1204,7 +1391,10 @@ function renderHistory(root){
           <span class="haction-action">${a.action||''}</span>
           ${badge}
         </div>
-        <span class="haction-time mono">${fmtTime(a.ts)}</span>
+        <span style="display:flex;align-items:center;gap:6px;">
+          <span class="haction-halfday ${hd.cls}">${hd.text}</span>
+          <span class="haction-time mono">${fmtTime(a.ts)}</span>
+        </span>
       </div>
       ${a.detail?`<div class="haction-detail">${a.detail}</div>`:''}
       ${manage}
@@ -1431,6 +1621,97 @@ function openResetQueueModal(){
 }
 
 /* =========================================================
+   NOON SIDE-SWAP RESET
+   ---------------------------------------------------------
+   Each physical PC (left / right) runs its own independent
+   copy of this app (separate localStorage, never synced by
+   design) and swaps which brands/staff it serves at midday.
+   This flow lets staff clear THIS machine's own queue at that
+   moment, without ever touching a ticket that's mid-service:
+     - SERVING tickets always block the reset outright — the
+       confirm button stays disabled, never just a soft warning,
+       until every one of them is completed.
+     - WAITING tickets are never hard-deleted. Each is moved to
+       its own terminal status, SWAP_CANCELLED ("ยกเลิก-สลับฝั่ง"),
+       with the normal changeLog + audit trail, so History can
+       always show who was left waiting at that exact moment.
+     - seqCounter resets to 0, same as the daily reset (Rule §14),
+       so the new side's first ticket is #1 — not a continuation
+       of whatever number the previous side's queue reached.
+   ========================================================= */
+function getNoonSwapPreview(){
+  const serving = state.queues.filter(q=>q.status==="SERVING").sort((a,b)=>a.calledAt-b.calledAt)
+    .map(q=>({seq:q.seq, staffName:staffById(q.staffId)?.name||'-', brandName:brandById(q.brandId)?.name||'-', calledAt:q.calledAt}));
+  const waiting = state.queues.filter(q=>q.status==="WAITING").sort((a,b)=>a.seq-b.seq)
+    .map(q=>({seq:q.seq, staffName:staffById(q.staffId)?.name||'-', brandName:brandById(q.brandId)?.name||'-'}));
+  return {serving, waiting};
+}
+
+function performNoonSwapReset(actorName){
+  const stillServing = state.queues.filter(q=>q.status==="SERVING").length;
+  if(stillServing>0){
+    return {ok:false, msg:`มี ${stillServing} คนกำลังบริการอยู่ กดจบคิวให้เสร็จก่อน`};
+  }
+  const prevSeqCounter = state.seqCounter;
+  let cancelled = 0;
+  const cancelledIds = [];
+  state.queues.forEach(q=>{
+    if(q.status==="WAITING"){
+      cancelled++;
+      cancelledIds.push(q.id);
+      const before = {status:q.status};
+      q.priorStatus = q.status;
+      q.status = "SWAP_CANCELLED";
+      q.deletedAt = nowTs();
+      q.deletedBy = actorName;
+      q.deleteReason = "สลับฝั่ง";
+      addChangeLog(q, actorName, "ยกเลิกคิว (สลับฝั่ง)", before, {status:"SWAP_CANCELLED"}, "สลับฝั่ง — เครื่องนี้เปลี่ยนไปรับอีกฝั่ง คิวเดิมถูกยกเลิก");
+    }
+  });
+  state.seqCounter = 0;
+  logAudit(actorName, "รีเซ็ตคิว — สลับฝั่ง", `ยกเลิกคิวที่รออยู่ ${cancelled} คิว เพื่อเตรียมสลับฝั่ง และเริ่มนับเลขคิวใหม่จาก 1`);
+  saveState();
+  return {ok:true, cancelled, cancelledIds, prevSeqCounter};
+}
+
+/* Undo window for an accidental "ยืนยันรีเซ็ต" tap — mirrors the pattern
+   already used for "ลงคิวผิด" (createQueue) and "กดขึ้นคิวผิดพลาด"
+   (returnQueueToWaiting): restores each SWAP_CANCELLED ticket from this
+   specific reset back to WAITING with its original seq, so it reappears
+   in the exact same spot in the waiting list. Still fully logged, so
+   there is no way to make the fact that a reset happened disappear —
+   only the outcome (cancelled → waiting again) changes. */
+function undoNoonSwapReset(queueIds, actorName, prevSeqCounter){
+  let restored = 0;
+  (queueIds||[]).forEach(id=>{
+    const q = state.queues.find(x=>x.id===id);
+    if(!q || q.status!=="SWAP_CANCELLED") return;
+    const before = {status:q.status};
+    q.status = "WAITING";
+    delete q.deletedAt; delete q.deletedBy; delete q.deleteReason; delete q.priorStatus;
+    addChangeLog(q, actorName, "คืนคิว", before, {status:"WAITING"}, "เลิกทำ \"เตรียมสลับฝั่ง\" — คืนคิวกลับไปที่ลำดับเดิม");
+    restored++;
+  });
+  if(restored>0){
+    // Only roll the running number back if nobody has queued under the new
+    // numbering yet (seqCounter still at 0) — otherwise undo would quietly
+    // swallow whichever few tickets were already created after the reset.
+    if(typeof prevSeqCounter === "number" && state.seqCounter === 0){
+      state.seqCounter = prevSeqCounter;
+    }
+    logAudit(actorName, "คืนคิว", `เลิกทำ "เตรียมสลับฝั่ง" — คืนคิวที่รอ ${restored} คิว กลับขึ้นกระดาน`);
+    saveState();
+  }
+  return restored;
+}
+
+function openNoonSwapModal(){
+  manageFlow = {type:"noonswap"};
+  document.getElementById('modalBackdrop').classList.add('show');
+  renderManageModal();
+}
+
+/* =========================================================
    ADD QUEUE MODAL — simplified: pick staff → confirm.
    No PIN step (removed for speed, per department request).
    Brand is derived automatically from the staff member.
@@ -1462,7 +1743,41 @@ let bulkSelectedIds = new Set();
 // Checkboxes only appear on the waiting list once this is true (toggled by
 // the "ยกเลิกหลายรายการ" button), so the board stays uncluttered by default.
 let bulkSelectMode = false;
+// Tracks the queue id currently being dragged for reordering (native HTML5
+// drag-and-drop). Only ever one at a time; cleared on drop/dragend.
+let draggedQueueId = null;
 const REASON_BOX = `style="width:100%;margin-top:8px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:10px;font-family:inherit;font-size:13.5px;resize:vertical;"`;
+
+/* Reason chips: replaces the old "open dropdown → scroll → pick" flow with
+   tap-once cards. Picking a reason is now a single tap instead of a
+   dropdown interaction, then the person just hits confirm. */
+function reasonChipsHtml(options){
+  return `<div class="reason-chips" id="reasonChips" data-value="">
+    ${options.map(o=>`<button type="button" class="reason-chip" data-value="${o}">${o==='OTHER'?'อื่นๆ (ระบุเอง)':o}</button>`).join('')}
+  </div>`;
+}
+// Call after inserting reasonChipsHtml() into the DOM. onPick (optional)
+// fires with the newly-selected value, e.g. to update a live preview.
+function wireReasonChips(onPick){
+  const container = document.getElementById('reasonChips');
+  if(!container) return;
+  const chips = container.querySelectorAll('.reason-chip');
+  chips.forEach(btn=>{
+    btn.onclick = ()=>{
+      chips.forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      container.dataset.value = btn.dataset.value;
+      if(btn.dataset.value==='OTHER'){
+        const box = document.getElementById('reasonInput');
+        if(box) box.focus();
+      }
+      if(onPick) onPick(btn.dataset.value);
+    };
+  });
+}
+function getReasonPreset(){
+  return document.getElementById('reasonChips')?.dataset.value || '';
+}
 
 /* Step-reduction fix: every cancel/skip/edit/substitute/create used to
    end by forcing the person to tap an extra "ตกลง" button on a full
@@ -1544,6 +1859,59 @@ function renderManageModal(){
     return;
   }
 
+  // Noon side-swap flow also has no single queueId — it's a whole-board
+  // preview + reset — so it's handled here too, before the single-queue
+  // lookup below.
+  if(manageFlow && manageFlow.type==='noonswap'){
+    const {serving, waiting} = getNoonSwapPreview();
+    const hasServing = serving.length>0;
+    const servingRows = serving.map(s=>`
+      <div style="font-size:13px;padding:6px 0;border-bottom:1px dashed var(--line);display:flex;justify-content:space-between;gap:10px;">
+        <span><strong>#${s.seq}</strong> ${s.staffName} · ${s.brandName}</span>
+        <span class="mono" style="color:var(--ink-faint);flex-shrink:0;">${s.calledAt?fmtClock(s.calledAt):'-'}</span>
+      </div>`).join('');
+    const waitingRows = waiting.map(w=>`
+      <div style="font-size:13px;padding:6px 0;border-bottom:1px dashed var(--line);">
+        <strong>#${w.seq}</strong> ${w.staffName} · ${w.brandName}
+      </div>`).join('');
+    body.innerHTML = `
+      <h3>เตรียมสลับฝั่ง</h3>
+      <div class="step-note">ตรวจสอบคิวของเครื่องนี้ก่อนสลับฝั่ง คิว "รอ" ทั้งหมดจะถูกยกเลิกและเก็บไว้ในประวัติเสมอ (ไม่ถูกลบทิ้ง) และเลขคิวจะเริ่มนับใหม่จาก 1</div>
+
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:${hasServing?'var(--danger)':'var(--ink-dim)'};">กำลังบริการอยู่ (${serving.length})</div>
+      ${serving.length
+        ? `<div style="max-height:120px;overflow-y:auto;margin-bottom:14px;">${servingRows}</div>`
+        : `<div class="empty-note" style="padding:2px 0 14px;">ไม่มีคิวกำลังบริการ</div>`}
+
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--ink-dim);">รอคิวอยู่ (${waiting.length}) — จะถูกยกเลิกเมื่อยืนยัน</div>
+      ${waiting.length
+        ? `<div style="max-height:160px;overflow-y:auto;">${waitingRows}</div>`
+        : `<div class="empty-note" style="padding:2px 0;">ไม่มีคิวรอ</div>`}
+
+      ${hasServing ? `<div class="error-msg">มี ${serving.length} คนกำลังบริการอยู่ กดจบคิวให้เสร็จก่อน</div>` : `<div class="error-msg" id="modalError"></div>`}
+
+      <div class="modal-actions">
+        <button class="btn-ghost" id="cancelBtn">ปิด</button>
+        <button class="btn-primary" id="confirmBtn" ${hasServing?'disabled':''}
+          style="background:${hasServing?'#cbd5e1':'#0D9488'};color:${hasServing?'#64748b':'#fff'};${hasServing?'cursor:not-allowed;':''}">ยืนยันรีเซ็ต</button>
+      </div>
+    `;
+    document.getElementById('cancelBtn').onclick = closeModal;
+    if(!hasServing){
+      document.getElementById('confirmBtn').onclick = ()=>{
+        const actor = session.role==='ADMIN'?'Admin':'พนักงานขาย';
+        const res = performNoonSwapReset(actor);
+        if(!res.ok){ document.getElementById('modalError').textContent = res.msg; return; }
+        closeModal(); render();
+        showActionToast(
+          `สลับฝั่งเรียบร้อย — ยกเลิกคิวที่รออยู่ ${res.cancelled} คิว · เริ่มนับคิวใหม่จาก 1`,
+          res.cancelled>0 ? ()=>{ undoNoonSwapReset(res.cancelledIds, actor, res.prevSeqCounter); render(); } : null
+        );
+      };
+    }
+    return;
+  }
+
   // Bulk-cancel flow also has no single queueId (it carries an ids array),
   // so it's handled here too, before the single-queue lookup below.
   if(manageFlow && manageFlow.type==='bulk-cancel'){
@@ -1558,17 +1926,7 @@ function renderManageModal(){
       <div class="step-note">คิวทั้งหมดด้านล่างจะถูกยกเลิกด้วยเหตุผลเดียวกัน และยังคงปรากฏใน "ประวัติ" และ "Audit Log" เสมอ เพื่อป้องกันการโกง/ทุจริตคิว</div>
       <div style="max-height:160px;overflow-y:auto;margin-bottom:10px;">${rowsHtml}</div>
       <div>เหตุผลในการยกเลิก (จำเป็น) :</div>
-      <select id="reasonPreset" class="reason-select">
-        <option value="">— เลือกเหตุผล —</option>
-        <option>กินข้าว</option>
-        <option>ยืนข้างหน้า</option>
-        <option>ลงคิวผิด</option>
-        <option>ยืนแทนคิว</option>
-        <option>ไม่อยู่ในแผนก</option>
-        <option>ไม่รับคิว</option>
-        <option>เปลี่ยนฝั่งยืน</option>
-        <option value="OTHER">อื่นๆ (ระบุเอง)</option>
-      </select>
+      ${reasonChipsHtml(['กินข้าว','ยืนข้างหน้า','ลงคิวผิด','ยืนแทนคิว','ไม่อยู่ในแผนก','ไม่รับคิว','เปลี่ยนฝั่งยืน','OTHER'])}
       <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
       <div class="error-msg" id="modalError"></div>
       <div class="modal-actions">
@@ -1576,9 +1934,10 @@ function renderManageModal(){
         <button class="btn-primary" id="confirmBtn" style="background:var(--danger);color:#fff;">ยืนยันยกเลิก ${targets.length} คิว</button>
       </div>
     `;
+    wireReasonChips();
     document.getElementById('cancelBtn').onclick = closeModal;
     document.getElementById('confirmBtn').onclick = ()=>{
-      const preset = document.getElementById('reasonPreset').value;
+      const preset = getReasonPreset();
       const typed = document.getElementById('reasonInput').value.trim();
       const reason = preset === 'OTHER' ? typed : (typed ? `${preset} — ${typed}` : preset);
       if(!reason || reason.trim().length < 3){ document.getElementById('modalError').textContent = 'กรุณาพิมพ์เหตุผลในการยกเลิกคิว (อย่างน้อย 3 ตัวอักษร)'; return; }
@@ -1606,17 +1965,7 @@ function renderManageModal(){
       <div class="step-note">${staff?.name||'-'} · ${brand?.name||'-'} · สถานะปัจจุบัน: ${STATUS_LABEL_TH[q.status]||q.status}<br>
       การยกเลิกจะยังคงปรากฏใน "ประวัติ" และ "Audit Log" เสมอ เพื่อป้องกันการโกง/ทุจริตคิว</div>
       <div>เหตุผลในการยกเลิก (จำเป็น) :</div>
-      <select id="reasonPreset" class="reason-select">
-        <option value="">— เลือกเหตุผล —</option>
-        <option>กินข้าว</option>
-        <option>ยืนข้างหน้า</option>
-        <option>ลงคิวผิด</option>
-        <option>ยืนแทนคิว</option>
-        <option>ไม่อยู่ในแผนก</option>
-        <option>ไม่รับคิว</option>
-        <option>เปลี่ยนฝั่งยืน</option>
-        <option value="OTHER">อื่นๆ (ระบุเอง)</option>
-      </select>
+      ${reasonChipsHtml(['กินข้าว','ยืนข้างหน้า','ลงคิวผิด','ยืนแทนคิว','ไม่อยู่ในแผนก','ไม่รับคิว','เปลี่ยนฝั่งยืน','OTHER'])}
       <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
       <div class="error-msg" id="modalError"></div>
       <div class="modal-actions">
@@ -1624,9 +1973,10 @@ function renderManageModal(){
         <button class="btn-primary" id="confirmBtn" style="background:var(--danger);color:#fff;">ยืนยันยกเลิกคิว</button>
       </div>
     `;
+    wireReasonChips();
     document.getElementById('cancelBtn').onclick = closeModal;
     document.getElementById('confirmBtn').onclick = ()=>{
-      const preset = document.getElementById('reasonPreset').value;
+      const preset = getReasonPreset();
       const typed = document.getElementById('reasonInput').value.trim();
       const reason = preset === 'OTHER' ? typed : (typed ? `${preset} — ${typed}` : preset);
       const actor = session.role==='ADMIN'?'Admin':(staff?.name||'พนักงานขาย');
@@ -1641,21 +1991,17 @@ function renderManageModal(){
       <h3>ข้ามคิว #${q.seq}</h3>
       <div class="step-note">${staff?.name||'-'} · ${brand?.name||'-'} · การข้ามคิวจะถูกบันทึกในประวัติและ Audit Log</div>
       <div>เหตุผลในการข้ามคิว (จำเป็น) :</div>
-      <select id="reasonPreset" class="reason-select">
-        <option value="">— เลือกเหตุผล —</option>
-        <option>ไม่อยู่ในแผนก</option>
-        <option>ไม่รับคิว</option>
-        <option value="OTHER">อื่นๆ (ระบุเอง)</option>
-      </select>
+      ${reasonChipsHtml(['ไม่อยู่ในแผนก','ไม่รับคิว','OTHER'])}
       <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
       <div class="error-msg" id="modalError"></div>
       <div class="modal-actions">
         <button class="btn-ghost" id="cancelBtn">ยกเลิก</button>
         <button class="btn-primary" id="confirmBtn">ยืนยันข้ามคิว</button>
       </div>`;
+    wireReasonChips();
     document.getElementById('cancelBtn').onclick=closeModal;
     document.getElementById('confirmBtn').onclick=()=>{
-      const preset=document.getElementById('reasonPreset').value;
+      const preset=getReasonPreset();
       const typed=document.getElementById('reasonInput').value.trim();
       const reason=preset==='OTHER'?typed:(typed?`${preset} — ${typed}`:preset);
       const actor=session.role==='ADMIN'?'Admin':(staff?.name||'พนักงานขาย');
@@ -1702,12 +2048,7 @@ function renderManageModal(){
         <div>เปลี่ยนเป็น: <strong>${newStaff?.name} (${newBrand?.name})</strong></div>
       </div>
       <div>เหตุผลในการแก้ไข (จำเป็น) :</div>
-      <select id="reasonPreset" class="reason-select">
-        <option value="">— เลือกเหตุผล —</option>
-        <option>ลงคิวผิด</option>
-        <option>ยืนแทนคิว</option>
-        <option value="OTHER">อื่นๆ (ระบุเอง)</option>
-      </select>
+      ${reasonChipsHtml(['ลงคิวผิด','ยืนแทนคิว','OTHER'])}
       <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
       <div class="error-msg" id="modalError"></div>
       <div class="modal-actions">
@@ -1715,9 +2056,10 @@ function renderManageModal(){
         <button class="btn-primary" id="confirmBtn">ยืนยันแก้ไข</button>
       </div>
     `;
+    wireReasonChips();
     document.getElementById('backBtn').onclick = ()=>{ manageFlow.step=1; renderManageModal(); };
     document.getElementById('confirmBtn').onclick = ()=>{
-      const preset = document.getElementById('reasonPreset').value;
+      const preset = getReasonPreset();
       const typed = document.getElementById('reasonInput').value.trim();
       const reason = preset === 'OTHER' ? typed : (typed ? `${preset} — ${typed}` : preset);
       const actor = session.role==='ADMIN'?'Admin':(staff?.name||'พนักงานขาย');
@@ -1771,12 +2113,7 @@ function renderManageModal(){
         <h3>ยืนยันแทนคิว</h3>
         <div class="confirm-summary" id="subPreview">${previewHtml(false)}</div>
         <div>เหตุผลในการแทนคิว (จำเป็น) :</div>
-        <select id="reasonPreset" class="reason-select">
-          <option value="">— เลือกเหตุผล —</option>
-          <option>ยืนแทนคิว</option>
-          <option>${SWAP_REASON}</option>
-          <option value="OTHER">อื่นๆ (ระบุเอง)</option>
-        </select>
+        ${reasonChipsHtml(['ยืนแทนคิว', SWAP_REASON, 'OTHER'])}
         <textarea id="reasonInput" rows="3" ${REASON_BOX} placeholder="เลือกเหตุผล หรือพิมพ์เหตุผลเพิ่มเติม..."></textarea>
         <div class="error-msg" id="modalError"></div>
         <div class="modal-actions">
@@ -1784,12 +2121,12 @@ function renderManageModal(){
           <button class="btn-primary" id="confirmBtn">ยืนยันแทนคิว</button>
         </div>
       `;
-      document.getElementById('reasonPreset').onchange = (e)=>{
-        document.getElementById('subPreview').innerHTML = previewHtml(e.target.value===SWAP_REASON);
-      };
+      wireReasonChips((value)=>{
+        document.getElementById('subPreview').innerHTML = previewHtml(value===SWAP_REASON);
+      });
       document.getElementById('backBtn').onclick = ()=>{ manageFlow.coveringId=null; renderManageModal(); };
       document.getElementById('confirmBtn').onclick = ()=>{
-        const preset = document.getElementById('reasonPreset').value;
+        const preset = getReasonPreset();
         const typed = document.getElementById('reasonInput').value.trim();
         const reason = preset === 'OTHER' ? typed : (typed ? `${preset} — ${typed}` : preset);
         const actor = session.role==='ADMIN'?'Admin':(staff?.name||'พนักงานขาย');
@@ -1834,6 +2171,10 @@ function renderManageModal(){
           changeDesc = `ตำแหน่งคิว #${l.before?.seq} → #${l.after?.seq}`;
         } else if(l.action==='รับช่วงคิว'){
           changeDesc = `รับช่วงต่อ — ตำแหน่งคิว #${l.before?.seq} → #${l.after?.seq}`;
+        } else if(l.action==='ยกเลิกคิว (สลับฝั่ง)'){
+          changeDesc = `สถานะเดิม: ${STATUS_LABEL_TH[l.before?.status]||l.before?.status||'-'} → ${STATUS_LABEL_TH.SWAP_CANCELLED}`;
+        } else if(l.action==='เลื่อนคิว' || l.action==='ลำดับเปลี่ยน (ถูกเลื่อน)'){
+          changeDesc = `ตำแหน่งคิว #${l.before?.seq} → #${l.after?.seq}`;
         }
         return `<div class="audit-line">
           <span class="ts mono">${fmtTime(l.ts)}</span><strong>${l.actor}</strong> — ${l.action}<br>
@@ -1920,15 +2261,18 @@ window.addEventListener('resize', render);
 (function(){
   const info = performDailyResetIfNeeded();
   if(info) showDailyResetToast(info);
+  if(checkNoonReminder()) showNoonReminderToast();
 })();
 setInterval(()=>{
   const info = performDailyResetIfNeeded();
   if(info){ render(); showDailyResetToast(info); }
+  if(checkNoonReminder()) showNoonReminderToast();
 }, 60000);
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState !== 'visible') return;
   const info = performDailyResetIfNeeded();
   if(info){ render(); showDailyResetToast(info); }
+  if(checkNoonReminder()) showNoonReminderToast();
 });
 
 render();
