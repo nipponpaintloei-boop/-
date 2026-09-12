@@ -466,6 +466,12 @@ function freshState(){
     lastActiveDate: todayKey(),
     lastNoonReminderDate: null,
     settings: { autoRequeue: false },
+    // Rule: a snapshot of whichever tickets were still WAITING the moment
+    // "เตรียมสลับฝั่ง" was confirmed, so staff can look back later and see
+    // exactly who got bumped at that swap — without having to reconstruct
+    // it by hand from the Audit Log. Newest first; capped in
+    // performNoonSwapReset so this can't grow forever.
+    noonSwapSnapshots: [],
   };
 }
 function loadState(){
@@ -485,6 +491,8 @@ function loadState(){
     // Older saved states won't have a settings object yet either.
     if(!parsed.settings || typeof parsed.settings !== "object") parsed.settings = { autoRequeue:false };
     if(typeof parsed.settings.autoRequeue !== "boolean") parsed.settings.autoRequeue = false;
+    // Older saved states (before this feature) won't have this array yet.
+    if(!Array.isArray(parsed.noonSwapSnapshots)) parsed.noonSwapSnapshots = [];
     return parsed;
   }catch(e){ return freshState(); }
 }
@@ -1344,6 +1352,7 @@ function renderHistory(root){
   root.innerHTML = `
     <div class="toolbar">
       <button class="btn-export" id="exportHistoryBtn">⇩ Export XLS</button>
+      <button class="btn-noonswap" id="noonSwapLogBtn" style="padding:8px 14px;">🔁 คิวค้างก่อนสลับฝั่ง${(state.noonSwapSnapshots&&state.noonSwapSnapshots.length)?` (${state.noonSwapSnapshots.length})`:''}</button>
       <input type="text" id="histSearch" placeholder="ค้นหาผู้ทำรายการ / ลำดับ / รายละเอียด">
       <select id="histDate"><option value="">ทุกวัน</option></select>
       <select id="histType">
@@ -1461,6 +1470,7 @@ function renderHistory(root){
   }
   document.getElementById('histSearch').oninput=draw;
   document.getElementById('exportHistoryBtn').onclick=exportHistoryXLS;
+  document.getElementById('noonSwapLogBtn').onclick=openNoonSwapLogModal;
   document.getElementById('histDate').onchange=draw;
   document.getElementById('histType').onchange=draw;
   draw();
@@ -1655,11 +1665,21 @@ function getNoonSwapPreview(){
   return {serving, waiting};
 }
 
+// Rule: cap how many past swap snapshots we keep so this never grows
+// unbounded on a device left running for months — the full detail always
+// still lives in the Audit Log / per-ticket change history anyway; this
+// array only exists as a quick "what was waiting at that moment" lookup.
+const MAX_NOON_SWAP_SNAPSHOTS = 60;
+
 function performNoonSwapReset(actorName){
   const stillServing = state.queues.filter(q=>q.status==="SERVING").length;
   if(stillServing>0){
     return {ok:false, msg:`มี ${stillServing} คนกำลังบริการอยู่ กดจบคิวให้เสร็จก่อน`};
   }
+  // Capture the "who was still waiting" list BEFORE any status changes below,
+  // so the snapshot reflects the board exactly as it stood the instant the
+  // swap was confirmed.
+  const snapshotWaiting = getNoonSwapPreview().waiting;
   const prevSeqCounter = state.seqCounter;
   let cancelled = 0;
   const cancelledIds = [];
@@ -1677,9 +1697,15 @@ function performNoonSwapReset(actorName){
     }
   });
   state.seqCounter = 0;
+  const snapshotTs = nowTs();
+  state.noonSwapSnapshots = state.noonSwapSnapshots || [];
+  state.noonSwapSnapshots.unshift({ ts: snapshotTs, actor: actorName, waiting: snapshotWaiting, cancelled });
+  if(state.noonSwapSnapshots.length > MAX_NOON_SWAP_SNAPSHOTS){
+    state.noonSwapSnapshots.length = MAX_NOON_SWAP_SNAPSHOTS;
+  }
   logAudit(actorName, "รีเซ็ตคิว — สลับฝั่ง", `ยกเลิกคิวที่รออยู่ ${cancelled} คิว เพื่อเตรียมสลับฝั่ง และเริ่มนับเลขคิวใหม่จาก 1`);
   saveState();
-  return {ok:true, cancelled, cancelledIds, prevSeqCounter};
+  return {ok:true, cancelled, cancelledIds, prevSeqCounter, snapshotTs};
 }
 
 /* Undo window for an accidental "ยืนยันรีเซ็ต" tap — mirrors the pattern
@@ -1689,7 +1715,7 @@ function performNoonSwapReset(actorName){
    in the exact same spot in the waiting list. Still fully logged, so
    there is no way to make the fact that a reset happened disappear —
    only the outcome (cancelled → waiting again) changes. */
-function undoNoonSwapReset(queueIds, actorName, prevSeqCounter){
+function undoNoonSwapReset(queueIds, actorName, prevSeqCounter, snapshotTs){
   let restored = 0;
   (queueIds||[]).forEach(id=>{
     const q = state.queues.find(x=>x.id===id);
@@ -1707,6 +1733,12 @@ function undoNoonSwapReset(queueIds, actorName, prevSeqCounter){
     if(typeof prevSeqCounter === "number" && state.seqCounter === 0){
       state.seqCounter = prevSeqCounter;
     }
+    // The snapshot recorded for this specific reset no longer reflects a
+    // real swap once it's undone, so drop it rather than leave a phantom
+    // entry in the History snapshot list.
+    if(snapshotTs && Array.isArray(state.noonSwapSnapshots)){
+      state.noonSwapSnapshots = state.noonSwapSnapshots.filter(s=>s.ts!==snapshotTs);
+    }
     logAudit(actorName, "คืนคิว", `เลิกทำ "เตรียมสลับฝั่ง" — คืนคิวที่รอ ${restored} คิว กลับขึ้นกระดาน`);
     saveState();
   }
@@ -1715,6 +1747,18 @@ function undoNoonSwapReset(queueIds, actorName, prevSeqCounter){
 
 function openNoonSwapModal(){
   manageFlow = {type:"noonswap"};
+  document.getElementById('modalBackdrop').classList.add('show');
+  renderManageModal();
+}
+
+/* Rule (follow-up): staff wanted an easy way to look back at whichever
+   tickets were still waiting the moment a past "เตรียมสลับฝั่ง" reset was
+   confirmed — mainly so nobody has to re-key a ticket from memory after
+   the swap and then also loses track of who else was still in line at
+   that exact moment. Read from History (see the button added in
+   renderHistory) via this modal, newest swap first. */
+function openNoonSwapLogModal(){
+  manageFlow = {type:"noonswaplog"};
   document.getElementById('modalBackdrop').classList.add('show');
   renderManageModal();
 }
@@ -1913,10 +1957,42 @@ function renderManageModal(){
         closeModal(); render();
         showActionToast(
           `สลับฝั่งเรียบร้อย — ยกเลิกคิวที่รออยู่ ${res.cancelled} คิว · เริ่มนับคิวใหม่จาก 1`,
-          res.cancelled>0 ? ()=>{ undoNoonSwapReset(res.cancelledIds, actor, res.prevSeqCounter); render(); } : null
+          res.cancelled>0 ? ()=>{ undoNoonSwapReset(res.cancelledIds, actor, res.prevSeqCounter, res.snapshotTs); render(); } : null
         );
       };
     }
+    return;
+  }
+
+  // Read-only lookback over past noon side-swap resets — no single queueId
+  // either, so it lives here too alongside the other whole-board flows.
+  if(manageFlow && manageFlow.type==='noonswaplog'){
+    const snapshots = state.noonSwapSnapshots || [];
+    const snapshotBlocks = snapshots.map(s=>{
+      const rows = (s.waiting||[]).map(w=>`
+        <div style="font-size:13px;padding:5px 0;border-bottom:1px dashed var(--line);">
+          <strong>#${w.seq}</strong> ${w.staffName} · ${w.brandName}
+        </div>`).join('');
+      return `
+        <div style="border:1px solid var(--line);border-left:4px solid #0D9488;border-radius:10px;padding:10px 12px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+            <span style="font-weight:700;font-size:13px;">${dateLabelTH(s.ts)} · ${fmtClock(s.ts)}</span>
+            <span style="font-size:12px;color:var(--ink-faint);">โดย ${s.actor||'-'} · ค้างอยู่ ${s.cancelled||0} คิว</span>
+          </div>
+          ${rows ? rows : `<div class="empty-note" style="padding:2px 0;">ไม่มีคิวรอ ณ ตอนนั้น</div>`}
+        </div>`;
+    }).join('');
+    body.innerHTML = `
+      <h3>คิวที่ค้างก่อนสลับฝั่ง (ย้อนหลัง)</h3>
+      <div class="step-note">รายการคิว "รอ" ของเครื่องนี้ ณ ตอนที่กดยืนยัน "เตรียมสลับฝั่ง" แต่ละครั้ง เรียงจากล่าสุดไปเก่าสุด — ดูไว้กันลืมเวลาต้องลงคิวใหม่ให้ใคร</div>
+      <div style="max-height:56vh;overflow-y:auto;">
+        ${snapshotBlocks || `<div class="empty-note">ยังไม่เคยมีการสลับฝั่ง</div>`}
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="cancelBtn">ปิด</button>
+      </div>
+    `;
+    document.getElementById('cancelBtn').onclick = closeModal;
     return;
   }
 
