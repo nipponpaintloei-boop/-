@@ -336,6 +336,8 @@
   .admin-item .staff-actions{display:flex; align-items:center; gap:8px; flex-shrink:0;}
   .btn-photo-upload{background:none; border:1px solid var(--line); color:var(--ink-dim); cursor:pointer; font-size:11.5px; padding:4px 9px; border-radius:6px;}
   .btn-photo-upload:hover{background:var(--panel-2);}
+  .btn-edit-name{background:none; border:1px solid var(--line); color:var(--ink-dim); cursor:pointer; font-size:11.5px; padding:4px 9px; border-radius:6px;}
+  .btn-edit-name:hover{background:var(--panel-2);}
   .btn-photo-remove{background:none; border:none; color:var(--danger); cursor:pointer; font-size:11.5px;}
   .admin-add{display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;}
   .admin-add input, .admin-add select{flex:1; background:var(--panel-2); border:1px solid var(--line); color:var(--ink); padding:9px 10px; border-radius:7px; font-size:13px; min-width:100px;}
@@ -1758,6 +1760,11 @@ function renderAdmin(root){
     const row = document.createElement('div');
     row.className = 'admin-item';
     row.innerHTML = `<span><span class="swatch" style="background:${b.color};display:inline-block;margin-right:8px;"></span>${b.name}</span>`;
+    const rowActions = document.createElement('span');
+    rowActions.style.cssText = 'display:flex;align-items:center;gap:8px;flex-shrink:0;';
+    const edit = document.createElement('button');
+    edit.type = 'button'; edit.className = 'btn-edit-name'; edit.textContent = 'แก้ไข';
+    edit.onclick = ()=> openEditBrandModal(b.id);
     const del = document.createElement('button');
     del.className = 'del'; del.textContent = 'ลบ';
     del.onclick = ()=>{
@@ -1766,7 +1773,9 @@ function renderAdmin(root){
       logAudit('Admin','ลบแบรนด์', b.name);
       saveState(); render();
     };
-    row.appendChild(del);
+    rowActions.appendChild(edit);
+    rowActions.appendChild(del);
+    row.appendChild(rowActions);
     brandList.appendChild(row);
   });
   document.getElementById('addBrandBtn').onclick = ()=>{
@@ -1802,6 +1811,9 @@ function renderAdmin(root){
       ${s.photo?`<button type="button" class="btn-photo-remove" data-role="photoRemoveBtn">ลบรูป</button>`:''}
     `;
     row.appendChild(actions);
+    const edit = document.createElement('button');
+    edit.type = 'button'; edit.className = 'btn-edit-name'; edit.textContent = 'แก้ไข';
+    edit.onclick = ()=> openEditStaffModal(s.id);
     const del = document.createElement('button');
     del.className = 'del'; del.textContent = 'ลบ';
     del.onclick = ()=>{
@@ -1810,6 +1822,7 @@ function renderAdmin(root){
       logAudit('Admin','ลบพนักงาน', s.name);
       saveState(); render();
     };
+    actions.appendChild(edit);
     actions.appendChild(del);
     staffList.appendChild(row);
 
@@ -1860,6 +1873,25 @@ function resetQueuesWithPin(pin){
 
 function openResetQueueModal(){
   manageFlow={type:"reset"};
+  document.getElementById('modalBackdrop').classList.add('show');
+  renderManageModal();
+}
+
+// Rename an existing brand in place (keeps its id/color/history/queue
+// links intact) — covers the case where a brand stays but needs a name
+// correction, without the delete-then-recreate dance.
+function openEditBrandModal(brandId){
+  manageFlow={type:"editBrand", brandId};
+  document.getElementById('modalBackdrop').classList.add('show');
+  renderManageModal();
+}
+
+// Rename a staff member and/or move them to a different brand in place
+// (keeps their id, photo, and full queue/audit history intact) — covers
+// the common "same brand, new person" turnover case without deleting
+// and re-adding, which would sever that history.
+function openEditStaffModal(staffId){
+  manageFlow={type:"editStaff", staffId};
   document.getElementById('modalBackdrop').classList.add('show');
   renderManageModal();
 }
@@ -2128,6 +2160,68 @@ function openLogModal(queueId){
 
 function renderManageModal(){
   const body = document.getElementById('modalBody');
+
+  // Brand/staff rename flows have no queueId either, so handle them
+  // before the generic single-queue lookup below.
+  if(manageFlow && manageFlow.type==='editBrand'){
+    const b = brandById(manageFlow.brandId);
+    body.innerHTML = `
+      <h3>แก้ไขชื่อแบรนด์</h3>
+      <input id="editBrandNameInput" value="${b?.name||''}" ${REASON_BOX} placeholder="ชื่อแบรนด์">
+      <div class="error-msg" id="modalError"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="cancelBtn">ยกเลิก</button>
+        <button class="btn-primary" id="confirmBtn">บันทึก</button>
+      </div>`;
+    document.getElementById('cancelBtn').onclick = closeModal;
+    document.getElementById('confirmBtn').onclick = ()=>{
+      const name = document.getElementById('editBrandNameInput').value.trim();
+      if(!name){ document.getElementById('modalError').textContent = 'กรุณากรอกชื่อแบรนด์'; return; }
+      if(state.brands.some(x=>x.id!==b.id && x.name.toLowerCase()===name.toLowerCase())){
+        document.getElementById('modalError').textContent = 'มีชื่อแบรนด์นี้อยู่แล้ว'; return;
+      }
+      const oldName = b.name;
+      if(oldName!==name){
+        b.name = name;
+        logAudit('Admin','แก้ไขชื่อแบรนด์', `${oldName} → ${name}`);
+        saveState();
+      }
+      closeModal(); render();
+    };
+    return;
+  }
+
+  if(manageFlow && manageFlow.type==='editStaff'){
+    const s = staffById(manageFlow.staffId);
+    const brandOptionsHtml = state.brands.map(br=>`<option value="${br.id}" ${br.id===s.brandId?'selected':''}>${br.name}</option>`).join('');
+    body.innerHTML = `
+      <h3>แก้ไขข้อมูลพนักงาน</h3>
+      <input id="editStaffNameInput" value="${s?.name||''}" ${REASON_BOX} placeholder="ชื่อพนักงาน">
+      <select id="editStaffBrandSelect" ${REASON_BOX}>${brandOptionsHtml}</select>
+      <div class="error-msg" id="modalError"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" id="cancelBtn">ยกเลิก</button>
+        <button class="btn-primary" id="confirmBtn">บันทึก</button>
+      </div>`;
+    document.getElementById('cancelBtn').onclick = closeModal;
+    document.getElementById('confirmBtn').onclick = ()=>{
+      const name = document.getElementById('editStaffNameInput').value.trim();
+      const brandId = document.getElementById('editStaffBrandSelect').value;
+      if(!name){ document.getElementById('modalError').textContent = 'กรุณากรอกชื่อพนักงาน'; return; }
+      const oldName = s.name, oldBrand = brandById(s.brandId), newBrand = brandById(brandId);
+      if(oldName!==name || s.brandId!==brandId){
+        let detail;
+        if(oldName!==name && s.brandId!==brandId) detail = `${oldName} (${oldBrand?.name||'-'}) → ${name} (${newBrand?.name||'-'})`;
+        else if(oldName!==name) detail = `${oldName} → ${name}`;
+        else detail = `${name}: ${oldBrand?.name||'-'} → ${newBrand?.name||'-'}`;
+        s.name = name; s.brandId = brandId;
+        logAudit('Admin','แก้ไขข้อมูลพนักงาน', detail);
+        saveState();
+      }
+      closeModal(); render();
+    };
+    return;
+  }
 
   // Reset flow does not have a queueId, so handle it before looking up a queue.
   if(manageFlow && manageFlow.type==='reset'){
