@@ -1930,10 +1930,14 @@ function getNoonSwapPreview(){
 const MAX_NOON_SWAP_SNAPSHOTS = 60;
 
 function performNoonSwapReset(actorName){
-  const stillServing = state.queues.filter(q=>q.status==="SERVING").length;
-  if(stillServing>0){
-    return {ok:false, msg:`มี ${stillServing} คนกำลังบริการอยู่ กดจบคิวให้เสร็จก่อน`};
-  }
+  // Concept: a side-swap should never be blocked just because someone is
+  // still SERVING. Those tickets are left alone — the staff keeps serving,
+  // then finishes normally later. Only WAITING tickets get cancelled here.
+  // Any ticket still SERVING at swap time is (re)tagged suppressAutoRequeue
+  // so that finishing it afterwards never auto-requeues that person onto
+  // this side's board — they've already swapped to the other side.
+  const stillServing = state.queues.filter(q=>q.status==="SERVING");
+  stillServing.forEach(q=>{ q.suppressAutoRequeue = true; });
   // Capture the "who was still waiting" list BEFORE any status changes below,
   // so the snapshot reflects the board exactly as it stood the instant the
   // swap was confirmed.
@@ -1966,9 +1970,9 @@ function performNoonSwapReset(actorName){
   if(state.noonSwapSnapshots.length > MAX_NOON_SWAP_SNAPSHOTS){
     state.noonSwapSnapshots.length = MAX_NOON_SWAP_SNAPSHOTS;
   }
-  logAudit(actorName, "รีเซ็ตคิว — สลับฝั่ง", `ยกเลิกคิวที่รออยู่ ${cancelled} คิว เพื่อเตรียมสลับฝั่ง และเริ่มนับเลขคิวใหม่จาก 1`);
+  logAudit(actorName, "รีเซ็ตคิว — สลับฝั่ง", `ยกเลิกคิวที่รออยู่ ${cancelled} คิว เพื่อเตรียมสลับฝั่ง และเริ่มนับเลขคิวใหม่จาก 1${stillServing.length?` (มี ${stillServing.length} คิวยังบริการอยู่ — จะไม่ลงคิวใหม่อัตโนมัติเมื่อจบคิว)`:''}`);
   saveState();
-  return {ok:true, cancelled, cancelledIds, prevSeqCounter, snapshotTs};
+  return {ok:true, cancelled, cancelledIds, prevSeqCounter, snapshotTs, stillServingCount: stillServing.length};
 }
 
 /* Undo window for an accidental "ยืนยันรีเซ็ต" tap — mirrors the pattern
@@ -2263,7 +2267,7 @@ function renderManageModal(){
       <h3>เตรียมสลับฝั่ง</h3>
       <div class="step-note">ตรวจสอบคิวของเครื่องนี้ก่อนสลับฝั่ง คิว "รอ" ทั้งหมดจะถูกยกเลิกและเก็บไว้ในประวัติเสมอ (ไม่ถูกลบทิ้ง) และเลขคิวจะเริ่มนับใหม่จาก 1</div>
 
-      <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:${hasServing?'var(--danger)':'var(--ink-dim)'};">กำลังบริการอยู่ (${serving.length})</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--ink-dim);">กำลังบริการอยู่ (${serving.length})</div>
       ${serving.length
         ? `<div style="max-height:120px;overflow-y:auto;margin-bottom:14px;">${servingRows}</div>`
         : `<div class="empty-note" style="padding:2px 0 14px;">ไม่มีคิวกำลังบริการ</div>`}
@@ -2273,28 +2277,29 @@ function renderManageModal(){
         ? `<div style="max-height:160px;overflow-y:auto;">${waitingRows}</div>`
         : `<div class="empty-note" style="padding:2px 0;">ไม่มีคิวรอ</div>`}
 
-      ${hasServing ? `<div class="error-msg">มี ${serving.length} คนกำลังบริการอยู่ กดจบคิวให้เสร็จก่อน</div>` : `<div class="error-msg" id="modalError"></div>`}
+      ${hasServing
+        ? `<div class="step-note" style="margin-top:12px;color:#B45309;">คิวที่กำลังบริการอยู่ ${serving.length} คิวจะยังคงอยู่จนกว่าจะกด "จบคิว" — เมื่อจบคิวแล้วจะ<strong>ไม่ลงคิวใหม่อัตโนมัติ</strong>ให้ เพราะสลับฝั่งไปแล้ว</div>`
+        : ''}
+      <div class="error-msg" id="modalError"></div>
 
       <div class="modal-actions">
         <button class="btn-ghost" id="cancelBtn">ปิด</button>
-        <button class="btn-primary" id="confirmBtn" ${hasServing?'disabled':''}
-          style="background:${hasServing?'#cbd5e1':'#0D9488'};color:${hasServing?'#64748b':'#fff'};${hasServing?'cursor:not-allowed;':''}">ยืนยันรีเซ็ต</button>
+        <button class="btn-primary" id="confirmBtn"
+          style="background:#0D9488;color:#fff;">ยืนยันรีเซ็ต</button>
       </div>
     `;
     document.getElementById('cancelBtn').onclick = closeModal;
-    if(!hasServing){
-      document.getElementById('confirmBtn').onclick = ()=>{
-        const actor = session.role==='ADMIN'?'Admin':'พนักงานขาย';
-        const res = performNoonSwapReset(actor);
-        if(!res.ok){ document.getElementById('modalError').textContent = res.msg; return; }
-        closeModal(); render();
-        hideNoonSwapBanner();
-        showActionToast(
-          `สลับฝั่งเรียบร้อย — ยกเลิกคิวที่รออยู่ ${res.cancelled} คิว · เริ่มนับคิวใหม่จาก 1`,
-          res.cancelled>0 ? ()=>{ undoNoonSwapReset(res.cancelledIds, actor, res.prevSeqCounter, res.snapshotTs); render(); } : null
-        );
-      };
-    }
+    document.getElementById('confirmBtn').onclick = ()=>{
+      const actor = session.role==='ADMIN'?'Admin':'พนักงานขาย';
+      const res = performNoonSwapReset(actor);
+      if(!res.ok){ document.getElementById('modalError').textContent = res.msg; return; }
+      closeModal(); render();
+      hideNoonSwapBanner();
+      showActionToast(
+        `สลับฝั่งเรียบร้อย — ยกเลิกคิวที่รออยู่ ${res.cancelled} คิว · เริ่มนับคิวใหม่จาก 1${res.stillServingCount?` · ${res.stillServingCount} คิวกำลังบริการอยู่จะไม่ลงคิวใหม่อัตโนมัติเมื่อจบคิว`:''}`,
+        res.cancelled>0 ? ()=>{ undoNoonSwapReset(res.cancelledIds, actor, res.prevSeqCounter, res.snapshotTs); render(); } : null
+      );
+    };
     return;
   }
 
