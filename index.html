@@ -63,20 +63,36 @@
   .action-toast{background:#15803D; display:flex; align-items:center; gap:10px;}
   .action-toast .toast-undo{background:transparent; border:1px solid rgba(255,255,255,.5); color:#fff; padding:5px 11px; border-radius:7px; font-size:12.5px; cursor:pointer; flex-shrink:0;}
   .action-toast .toast-undo:hover{background:rgba(255,255,255,.15);}
-  .noon-banner{
-    display:none; align-items:center; justify-content:center; gap:16px;
-    flex-wrap:wrap; background:#0D9488; color:#fff;
-    padding:12px 20px; font-size:14px; font-weight:600;
-    box-shadow:0 3px 10px rgba(0,0,0,.14);
+
+  /* ---------- Noon side-swap reminder — centered premium alert ---------- */
+  .noon-overlay{
+    position:fixed; inset:0; z-index:9999; display:none; align-items:center; justify-content:center;
+    background:rgba(15,23,42,.6); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    padding:20px; opacity:0; transition:opacity .25s ease;
   }
-  .noon-banner.show{display:flex;}
-  .noon-banner-msg{max-width:640px;}
-  .noon-banner-actions{display:flex; gap:8px; flex-shrink:0;}
-  .noon-banner-btn{border:none; border-radius:7px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer;}
-  .noon-banner-btn-primary{background:#fff; color:#0D9488;}
-  .noon-banner-btn-primary:hover{background:#EAFBF8;}
-  .noon-banner-btn-ghost{background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.55);}
-  .noon-banner-btn-ghost:hover{background:rgba(255,255,255,.26);}
+  .noon-overlay.show{display:flex; opacity:1;}
+  .noon-overlay-card{
+    background:#fff; border-radius:22px; max-width:420px; width:100%; padding:38px 32px 30px; text-align:center;
+    box-shadow:0 30px 70px -15px rgba(15,23,42,.35), 0 10px 25px rgba(15,23,42,.15);
+    transform:scale(.9) translateY(12px); transition:transform .32s cubic-bezier(.34,1.56,.64,1);
+  }
+  .noon-overlay.show .noon-overlay-card{transform:scale(1) translateY(0);}
+  .noon-icon-wrap{position:relative; width:84px; height:84px; margin:0 auto 18px;}
+  .noon-icon-ring{position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle, rgba(13,148,136,.35), transparent 70%); animation:noonPulse 1.8s ease-out infinite;}
+  .noon-icon-ring2{position:absolute; inset:0; border-radius:50%; background:radial-gradient(circle, rgba(13,148,136,.28), transparent 70%); animation:noonPulse 1.8s ease-out .6s infinite;}
+  .noon-icon-circle{position:relative; width:84px; height:84px; border-radius:50%; background:linear-gradient(135deg,#14B8A6,#0D9488); display:flex; align-items:center; justify-content:center; font-size:36px; box-shadow:0 10px 24px rgba(13,148,136,.4);}
+  @keyframes noonPulse{0%{transform:scale(.7); opacity:.7;} 100%{transform:scale(1.8); opacity:0;}}
+  .noon-live-clock{display:inline-flex; align-items:center; gap:7px; background:#FEF2F2; color:#DC2626; font-weight:700; font-size:12.5px; padding:6px 14px; border-radius:999px; margin-bottom:16px; letter-spacing:.2px;}
+  .noon-live-clock .dot{width:7px; height:7px; border-radius:50%; background:#DC2626; animation:noonBlink 1s ease-in-out infinite;}
+  @keyframes noonBlink{0%,100%{opacity:1;} 50%{opacity:.25;}}
+  .noon-overlay-title{font-size:21px; font-weight:800; color:var(--ink); margin-bottom:8px; letter-spacing:-.2px;}
+  .noon-overlay-msg{font-size:14px; color:var(--ink-dim); line-height:1.65; margin-bottom:28px;}
+  .noon-overlay-actions{display:flex; flex-direction:column; gap:10px;}
+  .noon-overlay-btn{border:none; border-radius:13px; padding:14px 20px; font-size:14.5px; font-weight:700; cursor:pointer; transition:transform .15s ease, box-shadow .15s ease;}
+  .noon-overlay-btn-primary{background:linear-gradient(135deg,#14B8A6,#0D9488); color:#fff; box-shadow:0 10px 22px rgba(13,148,136,.38);}
+  .noon-overlay-btn-primary:hover{transform:translateY(-1px); box-shadow:0 14px 28px rgba(13,148,136,.48);}
+  .noon-overlay-btn-ghost{background:var(--panel-2); color:var(--ink-dim); border:1px solid var(--line);}
+  .noon-overlay-btn-ghost:hover{background:#EEF1F4;}
 
   /* ---------- App shell ---------- */
   .app{max-width:1180px;margin:0 auto;padding:18px 20px 60px;}
@@ -441,11 +457,20 @@ table.hist tr:hover td{background:#f8fafc;}
 <div id="dailyResetToast" class="daily-reset-toast"></div>
 <div id="actionToast" class="daily-reset-toast action-toast"></div>
 
-<div id="noonSwapBanner" class="noon-banner">
-  <div class="noon-banner-msg">🕛 <strong>ใกล้ถึงเวลาสลับฝั่งแล้ว</strong> — เครื่องนี้ถึงกำหนดสลับหรือยัง เตรียมตัวไว้ได้เลย</div>
-  <div class="noon-banner-actions">
-    <button id="noonBannerOkBtn" class="noon-banner-btn noon-banner-btn-ghost">ตกลง</button>
-    <button id="noonBannerSwapBtn" class="noon-banner-btn noon-banner-btn-primary">🔁 เตรียมสลับฝั่ง</button>
+<div id="noonSwapBanner" class="noon-overlay">
+  <div class="noon-overlay-card">
+    <div class="noon-icon-wrap">
+      <div class="noon-icon-ring"></div>
+      <div class="noon-icon-ring2"></div>
+      <div class="noon-icon-circle">🕛</div>
+    </div>
+    <div class="noon-live-clock"><span class="dot"></span><span id="noonLiveClockText">--:--:--</span> น.</div>
+    <div class="noon-overlay-title">ถึงเวลาสลับฝั่งแล้ว</div>
+    <div class="noon-overlay-msg">เครื่องนี้ถึงกำหนดสลับฝั่งแล้ว — ตรวจสอบคิวที่กำลังบริการและคิวที่รออยู่ให้เรียบร้อยก่อนยืนยันสลับ</div>
+    <div class="noon-overlay-actions">
+      <button id="noonBannerSwapBtn" class="noon-overlay-btn noon-overlay-btn-primary">🔁 เตรียมสลับฝั่งตอนนี้</button>
+      <button id="noonBannerOkBtn" class="noon-overlay-btn noon-overlay-btn-ghost">ไว้สักครู่</button>
+    </div>
   </div>
 </div>
 
@@ -649,15 +674,26 @@ function checkNoonReminder(){
   saveState();
   return true;
 }
+let __noonClockInterval = null;
 function showNoonSwapBanner(){
   const el = document.getElementById('noonSwapBanner');
   if(!el) return;
   el.classList.add('show');
+  // Live-updating clock inside the card reinforces that this is a real,
+  // current-moment alert (not a static message) — ticks every second
+  // while the overlay is on screen, and stops the instant it's dismissed.
+  const clockEl = document.getElementById('noonLiveClockText');
+  const tick = ()=>{ if(clockEl) clockEl.textContent = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); };
+  tick();
+  clearInterval(__noonClockInterval);
+  __noonClockInterval = setInterval(tick, 1000);
 }
 function hideNoonSwapBanner(){
   const el = document.getElementById('noonSwapBanner');
   if(!el) return;
   el.classList.remove('show');
+  clearInterval(__noonClockInterval);
+  __noonClockInterval = null;
 }
 
 /* current simulated session — role only. Device is detected for real (see isMobileDevice). */
