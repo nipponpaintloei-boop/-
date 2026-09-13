@@ -2668,7 +2668,31 @@ function render(){
 // auto-refresh so served-since / stats stay live even without user action
 setInterval(()=>{ if(session.tab==="board") renderBoard(document.getElementById('viewRoot')); }, 15000);
 // re-check device gate on resize/rotation
-window.addEventListener('resize', render);
+//
+// NOTE: on phones/tablets, opening the on-screen keyboard to type into any
+// input (e.g. admin "add" or "edit" fields) also fires a resize event, since
+// the visual viewport height shrinks. Calling the full render() on every
+// single one of those — as this used to do unconditionally — tears down and
+// rebuilds the current tab's DOM, which yanks focus out of whatever field
+// was being typed into. So: only actually re-render when the write-gate
+// (canWrite()) has genuinely flipped, and never while an input/textarea/
+// select is focused — that covers the real "rotated the tablet" / "resized
+// the window" cases this guard exists for, without breaking typing.
+let __lastCanWrite = canWrite();
+let __resizeRecheckTimer = null;
+function recheckDeviceGateOnResize(){
+  const nowCanWrite = canWrite();
+  if(nowCanWrite === __lastCanWrite) return; // nothing the gate cares about changed
+  __lastCanWrite = nowCanWrite;
+  const active = document.activeElement;
+  const isTyping = active && ['INPUT','TEXTAREA','SELECT'].includes(active.tagName);
+  if(isTyping) return; // don't steal focus mid-edit even if the gate did flip
+  render();
+}
+window.addEventListener('resize', ()=>{
+  clearTimeout(__resizeRecheckTimer);
+  __resizeRecheckTimer = setTimeout(recheckDeviceGateOnResize, 250);
+});
 
 /* Rule §14 — check for a day-change every time the app opens (already done
    once below, before the first render), AND every minute while the tab is
