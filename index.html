@@ -1255,7 +1255,10 @@ function renderBoard(root){
         // department used to do in Notepad — delete the served name, then
         // immediately write it again at the end of the list. Undo-able via
         // the toast in case that particular person is done for the day.
-        if(state.settings.autoRequeue){
+        // Skipped for a ticket tagged suppressAutoRequeue — it was already
+        // serving when someone opened "เตรียมสลับฝั่ง", so finishing it here
+        // is part of clearing out for a side-swap, not a normal completion.
+        if(state.settings.autoRequeue && !q.suppressAutoRequeue){
           const res = createQueue(q.staffId, true);
           render();
           if(res.ok){
@@ -1269,7 +1272,11 @@ function renderBoard(root){
           }
         } else {
           render();
-          showActionToast(`จบคิว #${finishedSeq} แล้ว`);
+          showActionToast(
+            state.settings.autoRequeue && q.suppressAutoRequeue
+              ? `จบคิว #${finishedSeq} แล้ว — ไม่ลงคิวใหม่อัตโนมัติ (เตรียมสลับฝั่งอยู่)`
+              : `จบคิว #${finishedSeq} แล้ว`
+          );
         }
       };
       const returnBtn = el.querySelector('[data-return-waiting]');
@@ -1970,6 +1977,14 @@ function undoNoonSwapReset(queueIds, actorName, prevSeqCounter, snapshotTs){
 }
 
 function openNoonSwapModal(){
+  // Snapshot whichever tickets are SERVING right now — if the operator has
+  // to go finish one of these before the reset can proceed (SERVING always
+  // blocks confirm), completing it shouldn't auto-requeue that person even
+  // with the toggle on: they're mid-swap to the other side, not staying on
+  // this queue. Tagged on the specific ticket, so it never affects anyone
+  // else's unrelated completions during the same window.
+  state.queues.forEach(q=>{ if(q.status==="SERVING") q.suppressAutoRequeue = true; });
+  saveState();
   manageFlow = {type:"noonswap"};
   document.getElementById('modalBackdrop').classList.add('show');
   renderManageModal();
