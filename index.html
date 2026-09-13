@@ -63,7 +63,20 @@
   .action-toast{background:#15803D; display:flex; align-items:center; gap:10px;}
   .action-toast .toast-undo{background:transparent; border:1px solid rgba(255,255,255,.5); color:#fff; padding:5px 11px; border-radius:7px; font-size:12.5px; cursor:pointer; flex-shrink:0;}
   .action-toast .toast-undo:hover{background:rgba(255,255,255,.15);}
-  .noon-reminder-toast{background:#0D9488;}
+  .noon-banner{
+    display:none; align-items:center; justify-content:center; gap:16px;
+    flex-wrap:wrap; background:#0D9488; color:#fff;
+    padding:12px 20px; font-size:14px; font-weight:600;
+    box-shadow:0 3px 10px rgba(0,0,0,.14);
+  }
+  .noon-banner.show{display:flex;}
+  .noon-banner-msg{max-width:640px;}
+  .noon-banner-actions{display:flex; gap:8px; flex-shrink:0;}
+  .noon-banner-btn{border:none; border-radius:7px; padding:8px 16px; font-size:13px; font-weight:700; cursor:pointer;}
+  .noon-banner-btn-primary{background:#fff; color:#0D9488;}
+  .noon-banner-btn-primary:hover{background:#EAFBF8;}
+  .noon-banner-btn-ghost{background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.55);}
+  .noon-banner-btn-ghost:hover{background:rgba(255,255,255,.26);}
 
   /* ---------- App shell ---------- */
   .app{max-width:1180px;margin:0 auto;padding:18px 20px 60px;}
@@ -277,6 +290,16 @@
   .confirm-summary div{font-size:13.5px; color:var(--ink-dim); margin-bottom:4px;}
   .confirm-summary strong{color:var(--ink);}
   .error-msg{color:var(--danger); font-size:13px; margin-top:8px; min-height:16px;}
+  /* ---------- Profile photo cropper (upload → pan/zoom → confirm) ---------- */
+  .cropper-stage{
+    position:relative; width:280px; height:280px; max-width:100%;
+    margin:0 auto; overflow:hidden; border-radius:14px; background:#15181D;
+    touch-action:none;
+  }
+  .cropper-stage img{position:absolute; left:0; top:0; user-select:none; cursor:grab; -webkit-user-drag:none;}
+  .cropper-stage img:active{cursor:grabbing;}
+  .cropper-zoom{display:flex; align-items:center; gap:10px; margin-top:14px;}
+  .cropper-zoom input[type="range"]{flex:1;}
   .success-ticket{text-align:center; padding:10px 0;}
   .success-ticket .bignum{font-size:44px; font-weight:700; margin:10px 0 2px;}
   .success-ticket .subline{color:var(--ink-faint); font-size:13px;}
@@ -415,7 +438,14 @@ table.hist tr:hover td{background:#f8fafc;}
 
 <div id="dailyResetToast" class="daily-reset-toast"></div>
 <div id="actionToast" class="daily-reset-toast action-toast"></div>
-<div id="noonReminderToast" class="daily-reset-toast noon-reminder-toast"></div>
+
+<div id="noonSwapBanner" class="noon-banner">
+  <div class="noon-banner-msg">🕛 <strong>ใกล้ถึงเวลาสลับฝั่งแล้ว</strong> — เครื่องนี้ถึงกำหนดสลับหรือยัง เตรียมตัวไว้ได้เลย</div>
+  <div class="noon-banner-actions">
+    <button id="noonBannerOkBtn" class="noon-banner-btn noon-banner-btn-ghost">ตกลง</button>
+    <button id="noonBannerSwapBtn" class="noon-banner-btn noon-banner-btn-primary">🔁 เตรียมสลับฝั่ง</button>
+  </div>
+</div>
 
 <div class="app">
 
@@ -591,31 +621,41 @@ function showDailyResetToast(info){
 }
 
 /* =========================================================
-   NOON REMINDER — a nudge only, never an automatic reset.
+   NOON SIDE-SWAP BANNER — a heads-up nudge only, never an
+   automatic reset.
    ---------------------------------------------------------
    The department deliberately rejected an automatic timer for
    the actual side-swap reset (Rule: staff must press "เตรียม
-   สลับฝั่ง" themselves). This is different: it's just a one-time-
-   per-day toast once local clock time passes 12:00, so staff
-   don't forget the swap is due — it does not touch any queue.
+   สลับฝั่ง" themselves). This is different: a full-width banner
+   across the top of the screen once local clock time passes a
+   threshold shortly BEFORE noon (11:58, so nobody is caught
+   right at 12:00 with no warning). It doesn't touch any queue.
+
    Tracked by date (not a boolean) so it naturally re-arms every
-   day, and only ever fires once per day even across reloads.
-   ========================================================= */
+   day, and only ever triggers once per day even across reloads.
+   If the swap actually happens earlier than the threshold (e.g.
+   11:50), performNoonSwapReset marks the day as handled too, so
+   the banner never shows at all that day — the swap already did
+   the thing the banner exists to remind people about. ========================================================= */
+const NOON_REMINDER_THRESHOLD_MIN = 11*60 + 58; // 11:58
 function checkNoonReminder(){
   const today = todayKey();
   if(state.lastNoonReminderDate === today) return false;
-  if(new Date().getHours() < 12) return false;
+  const now = new Date();
+  if((now.getHours()*60 + now.getMinutes()) < NOON_REMINDER_THRESHOLD_MIN) return false;
   state.lastNoonReminderDate = today;
   saveState();
   return true;
 }
-function showNoonReminderToast(){
-  const el = document.getElementById('noonReminderToast');
+function showNoonSwapBanner(){
+  const el = document.getElementById('noonSwapBanner');
   if(!el) return;
-  el.textContent = `🕛 ถึงเวลาเที่ยงแล้ว — ถ้าเครื่องนี้ถึงกำหนดสลับฝั่ง อย่าลืมกด "เตรียมสลับฝั่ง"`;
   el.classList.add('show');
-  clearTimeout(showNoonReminderToast._t);
-  showNoonReminderToast._t = setTimeout(()=>el.classList.remove('show'), 8000);
+}
+function hideNoonSwapBanner(){
+  const el = document.getElementById('noonSwapBanner');
+  if(!el) return;
+  el.classList.remove('show');
 }
 
 /* current simulated session — role only. Device is detected for real (see isMobileDevice). */
@@ -673,27 +713,100 @@ function avatarHTML(staff, brand, size){
   return `<div class="avatar avatar-empty" style="${style}" title="${staff?staff.name:''}"></div>`;
 }
 
-/* Reads an <input type=file> image, downsamples it to a size×size square
-   (cover-crop, centered) via canvas, and returns a JPEG data URL through
-   the callback. Keeps stored photos small so many staff photos don't blow
-   past the browser's localStorage quota. */
-function resizeImageFile(file, size, cb){
+/* Facebook/IG-style crop step for a just-picked profile photo: shows the
+   photo in a fixed square "stage" the person can drag to pan and use a
+   slider to zoom, then bakes exactly what's visible in that square onto a
+   size×size canvas on confirm. Reuses the app's existing modal shell but
+   drives its own DOM directly (bypasses addFlow/manageFlow) since this
+   isn't part of either of those flows. */
+function openPhotoCropperModal(file, staff, onSaved){
+  const STAGE = 280, OUTPUT = 160, MAX_ZOOM = 4;
   const reader = new FileReader();
   reader.onload = (e)=>{
+    const dataUrl = e.target.result;
     const img = new Image();
     img.onload = ()=>{
-      const canvas = document.createElement('canvas');
-      canvas.width = size; canvas.height = size;
-      const ctx = canvas.getContext('2d');
-      const scale = Math.max(size/img.width, size/img.height);
-      const w = img.width*scale, h = img.height*scale;
-      ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
-      cb(canvas.toDataURL('image/jpeg', 0.85));
+      document.getElementById('modalBackdrop').classList.add('show');
+      const body = document.getElementById('modalBody');
+      body.innerHTML = `
+        <h3>ปรับตำแหน่งรูปโปรไฟล์</h3>
+        <div class="step-note">ลากรูปเพื่อเลื่อนตำแหน่ง ใช้แถบเลื่อนเพื่อซูม แล้วกด "ตกลง"</div>
+        <div class="cropper-stage" id="cropperStage"></div>
+        <div class="cropper-zoom">
+          <span style="font-size:13px;">🔍</span>
+          <input type="range" id="cropperZoomRange" min="1" max="${MAX_ZOOM}" step="0.01" value="1">
+        </div>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="cropperCancelBtn">ยกเลิก</button>
+          <button class="btn-primary" id="cropperOkBtn">✓ ตกลง</button>
+        </div>
+      `;
+      const stage = document.getElementById('cropperStage');
+      const imgEl = document.createElement('img');
+      imgEl.src = dataUrl;
+      imgEl.draggable = false;
+      stage.appendChild(imgEl);
+
+      const baseScale = Math.max(STAGE/img.naturalWidth, STAGE/img.naturalHeight);
+      let zoom = 1, left = 0, top = 0;
+      const dispW = ()=> img.naturalWidth*baseScale*zoom;
+      const dispH = ()=> img.naturalHeight*baseScale*zoom;
+      function clamp(){
+        left = Math.min(0, Math.max(left, STAGE-dispW()));
+        top  = Math.min(0, Math.max(top,  STAGE-dispH()));
+      }
+      function apply(){
+        imgEl.style.width = dispW()+'px';
+        imgEl.style.height = dispH()+'px';
+        imgEl.style.left = left+'px';
+        imgEl.style.top = top+'px';
+      }
+      left = (STAGE-dispW())/2; top = (STAGE-dispH())/2;
+      apply();
+
+      let dragging=false, startX=0, startY=0, startLeft=0, startTop=0;
+      stage.addEventListener('pointerdown', (ev)=>{
+        dragging = true; startX=ev.clientX; startY=ev.clientY; startLeft=left; startTop=top;
+        stage.setPointerCapture(ev.pointerId);
+      });
+      stage.addEventListener('pointermove', (ev)=>{
+        if(!dragging) return;
+        left = startLeft + (ev.clientX-startX);
+        top = startTop + (ev.clientY-startY);
+        clamp(); apply();
+      });
+      const endDrag = ()=>{ dragging=false; };
+      stage.addEventListener('pointerup', endDrag);
+      stage.addEventListener('pointercancel', endDrag);
+
+      document.getElementById('cropperZoomRange').oninput = (ev)=>{
+        // Keep whatever is currently centered in view still centered after
+        // the zoom changes, instead of re-centering on the whole image.
+        const oldW = dispW(), oldH = dispH();
+        const cxFrac = (-left + STAGE/2) / oldW;
+        const cyFrac = (-top  + STAGE/2) / oldH;
+        zoom = parseFloat(ev.target.value);
+        left = -(cxFrac*dispW()) + STAGE/2;
+        top  = -(cyFrac*dispH()) + STAGE/2;
+        clamp(); apply();
+      };
+
+      document.getElementById('cropperCancelBtn').onclick = closeModal;
+      document.getElementById('cropperOkBtn').onclick = ()=>{
+        const scale = dispW()/img.naturalWidth;
+        const sx = (-left)/scale, sy = (-top)/scale, sSize = STAGE/scale;
+        const canvas = document.createElement('canvas');
+        canvas.width = OUTPUT; canvas.height = OUTPUT;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, OUTPUT, OUTPUT);
+        closeModal();
+        onSaved(canvas.toDataURL('image/jpeg', 0.85));
+      };
     };
-    img.onerror = ()=> cb(null);
-    img.src = e.target.result;
+    img.onerror = ()=> alert('ไม่สามารถอ่านไฟล์รูปนี้ได้');
+    img.src = dataUrl;
   };
-  reader.onerror = ()=> cb(null);
+  reader.onerror = ()=> alert('ไม่สามารถอ่านไฟล์รูปนี้ได้');
   reader.readAsDataURL(file);
 }
 
@@ -1697,10 +1810,10 @@ function renderAdmin(root){
     actions.querySelector('[data-role="photoUploadBtn"]').onclick = ()=> fileInput.click();
     fileInput.onchange = (e)=>{
       const file = e.target.files[0];
+      e.target.value = ''; // allow picking the same file again later
       if(!file) return;
       if(!file.type || !file.type.startsWith('image/')){ alert('กรุณาเลือกไฟล์รูปภาพ'); return; }
-      resizeImageFile(file, 160, (dataUrl)=>{
-        if(!dataUrl){ alert('ไม่สามารถอ่านไฟล์รูปนี้ได้'); return; }
+      openPhotoCropperModal(file, s, (dataUrl)=>{
         s.photo = dataUrl;
         logAudit('Admin','อัปโหลดรูปพนักงาน', s.name);
         saveState(); render();
@@ -1803,6 +1916,11 @@ function performNoonSwapReset(actorName){
     }
   });
   state.seqCounter = 0;
+  // A swap that happens before the noon banner's threshold time (e.g. an
+  // early 11:50 swap) already accomplished what the banner exists to
+  // remind people about — so mark today as "handled" even though the
+  // banner itself may never have shown, and it won't pop up later today.
+  state.lastNoonReminderDate = todayKey();
   const snapshotTs = nowTs();
   state.noonSwapSnapshots = state.noonSwapSnapshots || [];
   state.noonSwapSnapshots.unshift({ ts: snapshotTs, actor: actorName, waiting: snapshotWaiting, cancelled });
@@ -2061,6 +2179,7 @@ function renderManageModal(){
         const res = performNoonSwapReset(actor);
         if(!res.ok){ document.getElementById('modalError').textContent = res.msg; return; }
         closeModal(); render();
+        hideNoonSwapBanner();
         showActionToast(
           `สลับฝั่งเรียบร้อย — ยกเลิกคิวที่รออยู่ ${res.cancelled} คิว · เริ่มนับคิวใหม่จาก 1`,
           res.cancelled>0 ? ()=>{ undoNoonSwapReset(res.cancelledIds, actor, res.prevSeqCounter, res.snapshotTs); render(); } : null
@@ -2451,19 +2570,25 @@ window.addEventListener('resize', render);
 (function(){
   const info = performDailyResetIfNeeded();
   if(info) showDailyResetToast(info);
-  if(checkNoonReminder()) showNoonReminderToast();
+  if(checkNoonReminder()) showNoonSwapBanner();
 })();
 setInterval(()=>{
   const info = performDailyResetIfNeeded();
   if(info){ render(); showDailyResetToast(info); }
-  if(checkNoonReminder()) showNoonReminderToast();
+  if(checkNoonReminder()) showNoonSwapBanner();
 }, 60000);
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState !== 'visible') return;
   const info = performDailyResetIfNeeded();
   if(info){ render(); showDailyResetToast(info); }
-  if(checkNoonReminder()) showNoonReminderToast();
+  if(checkNoonReminder()) showNoonSwapBanner();
 });
+
+document.getElementById('noonBannerOkBtn').onclick = hideNoonSwapBanner;
+document.getElementById('noonBannerSwapBtn').onclick = ()=>{
+  hideNoonSwapBanner();
+  if(canWrite()) openNoonSwapModal();
+};
 
 render();
 
