@@ -121,8 +121,8 @@
      instead of a fixed green, so two different people's cards no longer
      look identical inside just because both happen to be "serving". */
   @keyframes servingGlowPulse{
-    0%,100%{ box-shadow:0 0 0 0 color-mix(in srgb, var(--card-brand-color) 45%, transparent); }
-    50%{ box-shadow:0 0 13px 2px color-mix(in srgb, var(--card-brand-color) 45%, transparent); }
+    0%,100%{ box-shadow:0 0 0 0 color-mix(in srgb, var(--card-brand-color) 28%, transparent); }
+    50%{ box-shadow:0 0 10px 1px color-mix(in srgb, var(--card-brand-color) 28%, transparent); }
   }
   @media (prefers-reduced-motion: reduce){ .serving-card{ animation:none; } }
   .serving-card .qno{font-size:30px; font-weight:800; letter-spacing:.5px;}
@@ -137,7 +137,7 @@
      than a piece of content. */
   .avatar{border-radius:14px; background-size:cover; background-position:center; flex-shrink:0; box-shadow:0 0 0 2px #fff;}
   .avatar-empty{background:var(--panel-2); border:1.5px dashed var(--line);}
-  .serving-card .avatar{position:absolute; top:14px; right:14px; width:80px; height:80px; box-shadow:0 0 0 2px var(--card-brand-color);}
+  .serving-card .avatar{position:absolute; top:14px; right:14px; width:80px; height:80px; border-radius:var(--radius)!important; box-shadow:0 0 0 2px #fff, 0 0 0 4px var(--card-brand-color);}
   .btn-complete{
     width:100%; background:var(--serving); color:#0B2410; border:none;
     padding:12px; border-radius:9px; font-size:14.5px; font-weight:800; cursor:pointer;
@@ -1125,7 +1125,7 @@ function renderBoard(root){
       el.className = 'serving-card';
       el.style.setProperty('--card-brand-color', brand?.color || 'var(--serving)');
       el.innerHTML = `
-        ${avatarHTML(staff, brand, 80)}
+        ${staff && staff.photo ? avatarHTML(staff, brand, 80) : ''}
         <div class="qno mono">${q.seq}${q.changeLog&&q.changeLog.length?` <span class="mono" style="font-size:11px;color:var(--focus);font-weight:600;">✎${q.changeLog.length}</span>`:''}</div>
         <div class="who">👤 ${staff?.name||'-'}</div>
         <div class="brandline"><span class="swatch" style="background:${brand?.color||'#888'}"></span>${brand?.name||'-'}</div>
